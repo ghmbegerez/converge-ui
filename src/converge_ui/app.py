@@ -23,7 +23,10 @@ def create_app() -> FastAPI:
 
     @app.get("/", include_in_schema=False, response_model=None)
     @app.get("/operations", include_in_schema=False, response_model=None)
+    @app.get("/reviews", include_in_schema=False, response_model=None)
+    @app.get("/compliance", include_in_schema=False, response_model=None)
     @app.get("/jobs/{job_id}", include_in_schema=False, response_model=None)
+    @app.get("/intents/{intent_id}", include_in_schema=False, response_model=None)
     def spa_shell(job_id: str | None = None):
         index_file = ui_dir / "index.html"
         if index_file.exists():

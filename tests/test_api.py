@@ -13,9 +13,11 @@ class FakeService:
         return {
             "services": {"orchestrator": {"reachable": True}, "converge": {"reachable": False}},
             "counts": {"running": 2, "blocked": 1, "retry_pending": 1, "merged": 4, "failed": 0},
-            "kpis": {"running": 2, "blocked": 1, "retry_pending": 1, "merged": 4, "failed": 0, "uptime_seconds": 10, "block_rate": 0.2},
+            "kpis": {"running": 2, "blocked": 1, "retry_pending": 1, "merged": 4, "failed": 0, "uptime_seconds": 10, "block_rate": 0.2, "open_reviews": 2, "mergeable_rate": 0.5},
             "alerts": [{"code": "service_down"}],
             "top_blockers": [{"job_id": "job-1"}],
+            "review_summary": {"open_reviews": 2},
+            "compliance": {"passed": False},
             "generated_at": "2026-03-05T12:00:00Z",
             "data_source": "real",
         }
@@ -46,6 +48,9 @@ class FakeService:
             "intent": {"id": "intent-1"},
             "intent_events": [{"event_type": "POLICY_EVALUATED"}],
             "risk_review": {"risk": {"risk_level": "high"}},
+            "reviews": [{"task_id": "review-1", "status": "open"}],
+            "review_summary": {"open_reviews": 1},
+            "compliance_report": {"passed": False},
             "operator_actions": {"retry": {"enabled": True}},
             "generated_at": "2026-03-05T12:00:00Z",
             "data_source": "real",
@@ -56,6 +61,25 @@ class FakeService:
             "intent": {"id": intent_id},
             "events": [{"event_type": "INTENT_CREATED"}],
             "risk_review": {"risk": {"risk_score": 44}},
+            "reviews": [{"task_id": "review-1", "status": "open"}],
+            "review_summary": {"open_reviews": 1},
+            "compliance_report": {"passed": True},
+            "generated_at": "2026-03-05T12:00:00Z",
+            "data_source": "real",
+        }
+
+    def get_reviews(self) -> dict:
+        return {
+            "items": [{"task_id": "review-1", "intent_id": "intent-1", "status": "open", "reviewer": "ops-oncall", "priority": 1}],
+            "summary": {"open_reviews": 1, "completed_reviews": 0},
+            "generated_at": "2026-03-05T12:00:00Z",
+            "data_source": "real",
+        }
+
+    def get_compliance(self) -> dict:
+        return {
+            "report": {"passed": False, "mergeable_rate": 0.42},
+            "alerts": [{"code": "security.attestation_missing", "severity": "critical"}],
             "generated_at": "2026-03-05T12:00:00Z",
             "data_source": "real",
         }
@@ -65,6 +89,21 @@ class FakeService:
 
     def retry_job(self, job_id: str) -> dict:
         return {"status": "disabled", "enabled": False, "job_id": job_id}
+
+    def request_review(self, *, intent_id: str, trigger: str = "policy", reviewer: str | None = None, priority: int | None = None) -> dict:
+        return {"status": "ok", "review": {"task_id": "review-created", "intent_id": intent_id, "trigger": trigger, "reviewer": reviewer, "priority": priority}}
+
+    def assign_review(self, task_id: str, *, reviewer: str) -> dict:
+        return {"status": "ok", "review": {"task_id": task_id, "reviewer": reviewer, "status": "assigned"}}
+
+    def complete_review(self, task_id: str, *, resolution: str = "approved", notes: str = "") -> dict:
+        return {"status": "ok", "review": {"task_id": task_id, "status": "completed", "resolution": resolution, "notes": notes}}
+
+    def escalate_review(self, task_id: str, *, reason: str = "sla_breach") -> dict:
+        return {"status": "ok", "review": {"task_id": task_id, "status": "escalated", "reason": reason}}
+
+    def cancel_review(self, task_id: str, *, reason: str = "") -> dict:
+        return {"status": "ok", "review": {"task_id": task_id, "status": "cancelled", "reason": reason}}
 
 
 class NullOrchestrator:
@@ -85,10 +124,43 @@ class NullOrchestrator:
 
 
 class NullConverge:
+    def dashboard(self):
+        return None
+
+    def dashboard_alerts(self):
+        return None
+
     def summary(self):
         return None
 
     def risk_gate_report(self):
+        return None
+
+    def compliance_report(self):
+        return None
+
+    def compliance_alerts(self):
+        return []
+
+    def reviews(self, *, intent_id: str | None = None, status: str | None = None):
+        return []
+
+    def reviews_summary(self):
+        return None
+
+    def request_review(self, *, intent_id: str, trigger: str = "policy", reviewer: str | None = None, priority: int | None = None):
+        return None
+
+    def assign_review(self, task_id: str, *, reviewer: str):
+        return None
+
+    def complete_review(self, task_id: str, *, resolution: str = "approved", notes: str = ""):
+        return None
+
+    def escalate_review(self, task_id: str, *, reason: str = "sla_breach"):
+        return None
+
+    def cancel_review(self, task_id: str, *, reason: str = ""):
         return None
 
     def health(self):
@@ -138,6 +210,7 @@ def test_overview_contract() -> None:
     assert "services" in payload
     assert "kpis" in payload
     assert payload["alerts"][0]["code"] == "service_down"
+    assert payload["kpis"]["open_reviews"] == 2
 
 
 def test_operations_contract() -> None:
@@ -154,6 +227,7 @@ def test_job_detail_contract() -> None:
     payload = r.json()
     assert payload["job"]["intent_id"] == "intent-1"
     assert payload["risk_review"]["risk"]["risk_level"] == "high"
+    assert payload["review_summary"]["open_reviews"] == 1
 
 
 def test_intent_detail_contract() -> None:
@@ -162,12 +236,51 @@ def test_intent_detail_contract() -> None:
     payload = r.json()
     assert payload["intent"]["id"] == "intent-1"
     assert payload["risk_review"]["risk"]["risk_score"] == 44
+    assert payload["reviews"][0]["task_id"] == "review-1"
+
+
+def test_reviews_contract() -> None:
+    r = client.get("/api/v1/reviews")
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["items"][0]["task_id"] == "review-1"
+    assert payload["summary"]["open_reviews"] == 1
+
+
+def test_compliance_contract() -> None:
+    r = client.get("/api/v1/compliance")
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["report"]["passed"] is False
+    assert payload["alerts"][0]["code"] == "security.attestation_missing"
 
 
 def test_refresh_action_contract() -> None:
     r = client.post("/api/v1/actions/refresh")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
+
+
+def test_review_actions_contract() -> None:
+    request = client.post("/api/v1/actions/reviews", json={"intent_id": "intent-1", "priority": 1})
+    assert request.status_code == 200
+    assert request.json()["review"]["intent_id"] == "intent-1"
+
+    assign = client.post("/api/v1/actions/reviews/review-1/assign", json={"reviewer": "ops-oncall"})
+    assert assign.status_code == 200
+    assert assign.json()["review"]["reviewer"] == "ops-oncall"
+
+    complete = client.post("/api/v1/actions/reviews/review-1/complete", json={"resolution": "approved", "notes": "looks good"})
+    assert complete.status_code == 200
+    assert complete.json()["review"]["status"] == "completed"
+
+    escalate = client.post("/api/v1/actions/reviews/review-1/escalate", json={"reason": "sla_breach"})
+    assert escalate.status_code == 200
+    assert escalate.json()["review"]["status"] == "escalated"
+
+    cancel = client.post("/api/v1/actions/reviews/review-1/cancel", json={"reason": "superseded"})
+    assert cancel.status_code == 200
+    assert cancel.json()["review"]["status"] == "cancelled"
 
 
 def test_root_serves_html_shell() -> None:

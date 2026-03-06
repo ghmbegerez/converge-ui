@@ -409,6 +409,20 @@ DEMO_INTENTS = {
                 {"code": "learn.production_gate", "title": "Critical policy gate must not be bypassed"},
             ],
         },
+        "reviews": [
+            {"task_id": "review-prod-policy", "intent_id": "intent-prod-policy", "status": "open", "reviewer": None, "priority": 1},
+        ],
+        "review_summary": {
+            "open_reviews": 1,
+            "completed_reviews": 0,
+        },
+        "compliance_report": {
+            "passed": False,
+            "alerts": [
+                {"code": "security.attestation_missing", "title": "Security attestation missing", "severity": "critical"},
+            ],
+            "mergeable_rate": 0.42,
+        },
     },
     "intent-critical-review": {
         "intent": {
@@ -440,6 +454,18 @@ DEMO_INTENTS = {
             ],
             "learning": [],
         },
+        "reviews": [
+            {"task_id": "review-critical-1", "intent_id": "intent-critical-review", "status": "open", "reviewer": "oncall-payments", "priority": 2},
+        ],
+        "review_summary": {
+            "open_reviews": 1,
+            "completed_reviews": 0,
+        },
+        "compliance_report": {
+            "passed": True,
+            "alerts": [],
+            "mergeable_rate": 0.78,
+        },
     },
 }
 
@@ -460,3 +486,33 @@ def get_demo_jobs() -> list[dict]:
 def get_demo_intent(intent_id: str) -> dict | None:
     payload = DEMO_INTENTS.get(intent_id)
     return deepcopy(payload) if payload else None
+
+
+def get_demo_reviews() -> list[dict]:
+    reviews: list[dict] = []
+    for intent in DEMO_INTENTS.values():
+        for review in intent.get("reviews", []):
+            reviews.append(deepcopy(review))
+    reviews.sort(key=lambda item: (item.get("priority") or 99, item.get("task_id") or ""))
+    return reviews
+
+
+def get_demo_compliance() -> dict:
+    alerts: list[dict] = []
+    passed = True
+    mergeable_rates: list[float] = []
+    for intent in DEMO_INTENTS.values():
+        report = intent.get("compliance_report") or {}
+        if report.get("passed") is False:
+            passed = False
+        for alert in report.get("alerts", []):
+            alerts.append(deepcopy(alert))
+        if isinstance(report.get("mergeable_rate"), (int, float)):
+            mergeable_rates.append(float(report["mergeable_rate"]))
+    mergeable_rate = round(sum(mergeable_rates) / len(mergeable_rates), 2) if mergeable_rates else None
+    return {
+        "passed": passed,
+        "alerts": alerts,
+        "mergeable_rate": mergeable_rate,
+        "source": "demo",
+    }

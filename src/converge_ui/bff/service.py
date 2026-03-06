@@ -5,7 +5,14 @@ from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
 
-from converge_ui.bff.demo_data import get_demo_intent, get_demo_job, get_demo_jobs, get_demo_state
+from converge_ui.bff.demo_data import (
+    get_demo_compliance,
+    get_demo_intent,
+    get_demo_job,
+    get_demo_jobs,
+    get_demo_reviews,
+    get_demo_state,
+)
 from converge_ui.clients.converge_client import ConvergeClient
 from converge_ui.clients.orchestrator_client import OrchestratorClient
 from converge_ui.config.settings import Settings, load_settings
@@ -52,11 +59,21 @@ class ControlPlaneService:
         state_bundle = self._resolve_state()
         operations_bundle = self._resolve_operations(state_bundle)
         summary = self.converge.summary()
+        dashboard = self.converge.dashboard()
+        dashboard_alerts = self.converge.dashboard_alerts()
+        compliance_report = self.converge.compliance_report()
+        reviews_summary = self.converge.reviews_summary()
         gate = self.converge.risk_gate_report()
         services = self._build_services(state_bundle, summary)
         counts = state_bundle["payload"]["counts"]
         blocked = operations_bundle["payload"]["blocked"]
-        alerts = self._build_alerts(services, blocked, state_bundle["source"])
+        alerts = self._build_alerts(
+            services,
+            blocked,
+            state_bundle["source"],
+            dashboard_alerts=dashboard_alerts,
+            compliance_report=compliance_report,
+        )
 
         block_rate = None
         if isinstance(gate, dict):
@@ -75,9 +92,15 @@ class ControlPlaneService:
                 "failed": counts.get("failed", 0),
                 "uptime_seconds": state_bundle["payload"].get("uptime_seconds", 0),
                 "block_rate": block_rate,
+                "open_reviews": self._summary_value(reviews_summary, "open_reviews", fallback=0),
+                "mergeable_rate": self._summary_value(compliance_report, "mergeable_rate"),
             },
             "alerts": alerts,
             "top_blockers": blocked[:3],
+            "queue_health": summary.get("queue") if isinstance(summary, dict) else None,
+            "converge_dashboard": dashboard,
+            "review_summary": reviews_summary,
+            "compliance": compliance_report,
             "generated_at": state_bundle["payload"].get("generated_at"),
             "data_source": state_bundle["source"],
         }
@@ -135,6 +158,9 @@ class ControlPlaneService:
             "intent": intent_bundle["intent"] if intent_bundle else None,
             "intent_events": intent_bundle["events"] if intent_bundle else [],
             "risk_review": intent_bundle["risk_review"] if intent_bundle else None,
+            "reviews": intent_bundle["reviews"] if intent_bundle else [],
+            "review_summary": intent_bundle["review_summary"] if intent_bundle else None,
+            "compliance_report": intent_bundle["compliance_report"] if intent_bundle else None,
             "operator_actions": self._operator_actions(job=job, intent=intent_bundle["intent"] if intent_bundle else None),
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "data_source": source if intent_bundle is None else self._merge_source(source, intent_bundle["data_source"]),
@@ -162,10 +188,50 @@ class ControlPlaneService:
             "intent": intent_bundle["intent"],
             "events": intent_bundle["events"],
             "risk_review": intent_bundle["risk_review"],
+            "reviews": intent_bundle["reviews"],
+            "review_summary": intent_bundle["review_summary"],
+            "compliance_report": intent_bundle["compliance_report"],
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "data_source": intent_bundle["data_source"],
         }
         self.cache.set(f"intent:{intent_id}", payload)
+        return payload
+
+    def get_reviews(self) -> dict[str, Any]:
+        reviews = [] if self.settings.data_mode == "demo" else self.converge.reviews()
+        summary = None if self.settings.data_mode == "demo" else self.converge.reviews_summary()
+        source = "real"
+        if not reviews and summary is None:
+            reviews = get_demo_reviews()
+            summary = {
+                "open_reviews": len([item for item in reviews if item.get("status") == "open"]),
+                "completed_reviews": len([item for item in reviews if item.get("status") == "completed"]),
+            }
+            source = "demo"
+        payload = {
+            "items": reviews,
+            "summary": summary,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": source,
+        }
+        self.cache.set("reviews", payload)
+        return payload
+
+    def get_compliance(self) -> dict[str, Any]:
+        report = None if self.settings.data_mode == "demo" else self.converge.compliance_report()
+        alerts = [] if self.settings.data_mode == "demo" else self.converge.compliance_alerts()
+        source = "real"
+        if report is None and not alerts:
+            report = get_demo_compliance()
+            alerts = report.get("alerts", [])
+            source = "demo"
+        payload = {
+            "report": report,
+            "alerts": alerts,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "data_source": source,
+        }
+        self.cache.set("compliance", payload)
         return payload
 
     def refresh(self) -> dict[str, Any]:
@@ -199,6 +265,79 @@ class ControlPlaneService:
             "job_id": job_id,
             "reason": "Retry is not exposed by the current orchestrator API.",
             "enabled": False,
+            "data_source": "demo",
+        }
+
+    def request_review(
+        self,
+        *,
+        intent_id: str,
+        trigger: str = "policy",
+        reviewer: str | None = None,
+        priority: int | None = None,
+    ) -> dict[str, Any]:
+        response = None if self.settings.data_mode == "demo" else self.converge.request_review(
+            intent_id=intent_id,
+            trigger=trigger,
+            reviewer=reviewer,
+            priority=priority,
+        )
+        if response is not None:
+            return {"status": "ok", "review": response, "data_source": "real"}
+        return {
+            "status": "simulated",
+            "review": {
+                "task_id": f"review-{intent_id}",
+                "intent_id": intent_id,
+                "status": "open",
+                "reviewer": reviewer,
+                "priority": priority,
+                "trigger": trigger,
+            },
+            "data_source": "demo",
+        }
+
+    def assign_review(self, task_id: str, *, reviewer: str) -> dict[str, Any]:
+        response = None if self.settings.data_mode == "demo" else self.converge.assign_review(task_id, reviewer=reviewer)
+        if response is not None:
+            return {"status": "ok", "review": response, "data_source": "real"}
+        return {
+            "status": "simulated",
+            "review": {"task_id": task_id, "reviewer": reviewer, "status": "assigned"},
+            "data_source": "demo",
+        }
+
+    def complete_review(self, task_id: str, *, resolution: str = "approved", notes: str = "") -> dict[str, Any]:
+        response = None if self.settings.data_mode == "demo" else self.converge.complete_review(
+            task_id,
+            resolution=resolution,
+            notes=notes,
+        )
+        if response is not None:
+            return {"status": "ok", "review": response, "data_source": "real"}
+        return {
+            "status": "simulated",
+            "review": {"task_id": task_id, "status": "completed", "resolution": resolution, "notes": notes},
+            "data_source": "demo",
+        }
+
+    def escalate_review(self, task_id: str, *, reason: str = "sla_breach") -> dict[str, Any]:
+        response = None if self.settings.data_mode == "demo" else self.converge.escalate_review(task_id, reason=reason)
+        if response is not None:
+            return {"status": "ok", "review": response, "data_source": "real"}
+        return {
+            "status": "simulated",
+            "review": {"task_id": task_id, "status": "escalated", "reason": reason},
+            "data_source": "demo",
+        }
+
+    def cancel_review(self, task_id: str, *, reason: str = "") -> dict[str, Any]:
+        response = None if self.settings.data_mode == "demo" else self.converge.cancel_review(task_id, reason=reason)
+        if response is not None:
+            return {"status": "ok", "review": response, "data_source": "real"}
+        return {
+            "status": "simulated",
+            "review": {"task_id": task_id, "status": "cancelled", "reason": reason},
             "data_source": "demo",
         }
 
@@ -308,7 +447,15 @@ class ControlPlaneService:
             },
         }
 
-    def _build_alerts(self, services: dict[str, Any], blocked: list[dict[str, Any]], source: str) -> list[dict[str, Any]]:
+    def _build_alerts(
+        self,
+        services: dict[str, Any],
+        blocked: list[dict[str, Any]],
+        source: str,
+        *,
+        dashboard_alerts: dict[str, Any] | None = None,
+        compliance_report: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         alerts: list[dict[str, Any]] = []
         if not services["orchestrator"]["reachable"]:
             alerts.append({"code": "service_down", "severity": "high", "title": "Orchestrator unavailable", "source": source})
@@ -318,6 +465,22 @@ class ControlPlaneService:
             alerts.append({"code": "stale_data", "severity": "medium", "title": "Showing last known snapshot", "source": source})
         if any((item.get("risk_level") in {"high", "critical"}) for item in blocked):
             alerts.append({"code": "blocked_high_risk", "severity": "critical", "title": "High-risk blocked work requires review", "source": source})
+        if isinstance(compliance_report, dict) and compliance_report.get("passed") is False:
+            for item in compliance_report.get("alerts", [])[:4]:
+                alerts.append({
+                    "code": item.get("code", "compliance_alert"),
+                    "severity": item.get("severity", "medium"),
+                    "title": item.get("title") or item.get("message") or "Compliance alert",
+                    "source": "converge",
+                })
+        if isinstance(dashboard_alerts, dict):
+            for item in dashboard_alerts.get("alerts", [])[:4]:
+                alerts.append({
+                    "code": item.get("code") or item.get("signal") or "dashboard_alert",
+                    "severity": item.get("severity", "medium"),
+                    "title": item.get("title") or item.get("message") or "Dashboard alert",
+                    "source": item.get("source", "converge"),
+                })
         return alerts
 
     def _recent_events(self, jobs_by_id: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -341,11 +504,17 @@ class ControlPlaneService:
         intent = None if self.settings.data_mode == "demo" else self.converge.get_intent(intent_id)
         events = [] if self.settings.data_mode == "demo" else self.converge.get_intent_events(intent_id)
         risk_review = None if self.settings.data_mode == "demo" else self.converge.get_risk_review(intent_id)
+        reviews = [] if self.settings.data_mode == "demo" else self.converge.reviews(intent_id=intent_id)
+        review_summary = None if self.settings.data_mode == "demo" else self.converge.reviews_summary()
+        compliance_report = None if self.settings.data_mode == "demo" else self.converge.compliance_report()
         if intent is not None:
             return {
                 "intent": intent,
                 "events": events,
                 "risk_review": risk_review,
+                "reviews": reviews,
+                "review_summary": review_summary,
+                "compliance_report": compliance_report,
                 "data_source": "real",
             }
         demo = get_demo_intent(intent_id)
@@ -354,6 +523,9 @@ class ControlPlaneService:
                 "intent": demo["intent"],
                 "events": demo["events"],
                 "risk_review": demo["risk_review"],
+                "reviews": demo.get("reviews", []),
+                "review_summary": demo.get("review_summary"),
+                "compliance_report": demo.get("compliance_report"),
                 "data_source": "demo",
             }
         return None
@@ -382,6 +554,11 @@ class ControlPlaneService:
         if "demo" in {left, right}:
             return "demo"
         return "real"
+
+    def _summary_value(self, payload: dict[str, Any] | None, key: str, fallback: Any = None) -> Any:
+        if not isinstance(payload, dict):
+            return fallback
+        return payload.get(key, fallback)
 
 
 _service: ControlPlaneService | None = None

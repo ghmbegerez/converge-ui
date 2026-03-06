@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "./App";
@@ -70,6 +70,35 @@ const jobPayload = {
   data_source: "stale-cache",
 };
 
+const intentPayload = {
+  intent: { id: "intent-prod-policy", status: "REJECTED", priority: "urgent", target: "main", risk_level: "critical" },
+  events: [
+    { event_type: "POLICY_EVALUATED", payload: { verdict: "BLOCK" } },
+  ],
+  risk_review: {
+    risk: { risk_level: "critical", risk_score: 82.4 },
+    compliance: { passed: false, alerts: [{ title: "Security attestation missing", severity: "critical" }] },
+  },
+  reviews: [{ task_id: "review-1", status: "open", reviewer: "ops-oncall" }],
+  compliance_report: { passed: false, alerts: [{ title: "Security attestation missing", severity: "critical" }] },
+  generated_at: "2026-03-05T12:00:00Z",
+  data_source: "demo",
+};
+
+const reviewsPayload = {
+  items: [{ task_id: "review-1", intent_id: "intent-prod-policy", status: "open", reviewer: "ops-oncall", priority: 1 }],
+  summary: { open_reviews: 1, completed_reviews: 0 },
+  generated_at: "2026-03-05T12:00:00Z",
+  data_source: "demo",
+};
+
+const compliancePayload = {
+  report: { passed: false, mergeable_rate: 0.42 },
+  alerts: [{ code: "security.attestation_missing", title: "Security attestation missing", severity: "critical" }],
+  generated_at: "2026-03-05T12:00:00Z",
+  data_source: "demo",
+};
+
 
 function renderAt(path: string) {
   window.history.pushState({}, "", path);
@@ -96,11 +125,35 @@ describe("App", () => {
         if (url === "/api/v1/jobs/job-prod-policy") {
           return Promise.resolve(new Response(JSON.stringify(jobPayload), { status: 200 }));
         }
+        if (url === "/api/v1/intents/intent-prod-policy") {
+          return Promise.resolve(new Response(JSON.stringify(intentPayload), { status: 200 }));
+        }
+        if (url === "/api/v1/reviews") {
+          return Promise.resolve(new Response(JSON.stringify(reviewsPayload), { status: 200 }));
+        }
+        if (url === "/api/v1/compliance") {
+          return Promise.resolve(new Response(JSON.stringify(compliancePayload), { status: 200 }));
+        }
         if (url === "/api/v1/actions/refresh" && init?.method === "POST") {
           return Promise.resolve(new Response(JSON.stringify({ status: "ok", note: "refreshed" }), { status: 200 }));
         }
         if (url === "/api/v1/actions/jobs/job-prod-policy/retry" && init?.method === "POST") {
           return Promise.resolve(new Response(JSON.stringify({ status: "disabled", reason: "Retry is not exposed by the current orchestrator API." }), { status: 200 }));
+        }
+        if (url === "/api/v1/actions/reviews" && init?.method === "POST") {
+          return Promise.resolve(new Response(JSON.stringify({ status: "simulated" }), { status: 200 }));
+        }
+        if (url === "/api/v1/actions/reviews/review-1/assign" && init?.method === "POST") {
+          return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+        }
+        if (url === "/api/v1/actions/reviews/review-1/complete" && init?.method === "POST") {
+          return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+        }
+        if (url === "/api/v1/actions/reviews/review-1/escalate" && init?.method === "POST") {
+          return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+        }
+        if (url === "/api/v1/actions/reviews/review-1/cancel" && init?.method === "POST") {
+          return Promise.resolve(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
         }
         return Promise.resolve(new Response(JSON.stringify({ error: "not found" }), { status: 404 }));
       }),
@@ -119,6 +172,8 @@ describe("App", () => {
     });
     expect(screen.getByText("Converge unavailable")).toBeTruthy();
     expect(screen.getByText("job-prod-policy")).toBeTruthy();
+    expect(screen.getAllByText("Open reviews").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Open compliance").length).toBeGreaterThan(0);
   });
 
   it("renders operations board with visible jobs", async () => {
@@ -131,6 +186,16 @@ describe("App", () => {
     expect(screen.getAllByText("job-prod-policy").length).toBeGreaterThan(0);
   });
 
+  it("filters operations by search text", async () => {
+    renderAt("/operations");
+    await waitFor(() => {
+      expect(screen.getByText("All visible jobs")).toBeTruthy();
+    });
+    fireEvent.change(screen.getByPlaceholderText("job, intent, trace, reason"), { target: { value: "merge_conflict" } });
+    expect(screen.getByText("1 visible")).toBeTruthy();
+    expect(screen.getAllByText("job-retry").length).toBeGreaterThan(0);
+  });
+
   it("renders job detail and stale cache banner", async () => {
     renderAt("/jobs/job-prod-policy");
     await waitFor(() => {
@@ -139,5 +204,52 @@ describe("App", () => {
     expect(screen.getByText("Showing cached detail while the live path recovers.")).toBeTruthy();
     expect(screen.getByText("Production fast path violates policy guardrail")).toBeTruthy();
     expect(screen.getByText("Intent summary")).toBeTruthy();
+  });
+
+  it("renders reviews page with queue actions", async () => {
+    renderAt("/reviews");
+    await waitFor(() => {
+      expect(screen.getByText("Review tasks")).toBeTruthy();
+    });
+    expect(screen.getAllByText("review-1").length).toBeGreaterThan(0);
+    expect(screen.getByText("Assign")).toBeTruthy();
+    expect(screen.getByText("Cancel")).toBeTruthy();
+  });
+
+  it("requests a review from the reviews page", async () => {
+    renderAt("/reviews");
+    await waitFor(() => {
+      expect(screen.getByText("Create review")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Request review" }));
+    await waitFor(() => {
+      expect(screen.getByText("simulated")).toBeTruthy();
+    });
+  });
+
+  it("filters reviews by status", async () => {
+    renderAt("/reviews");
+    await waitFor(() => {
+      expect(screen.getByText("Review tasks")).toBeTruthy();
+    });
+    fireEvent.change(screen.getAllByDisplayValue("all")[0], { target: { value: "open" } });
+    expect(screen.getAllByText("review-1").length).toBeGreaterThan(0);
+  });
+
+  it("renders compliance page with alerts", async () => {
+    renderAt("/compliance");
+    await waitFor(() => {
+      expect(screen.getByText("Compliance posture")).toBeTruthy();
+    });
+    expect(screen.getAllByText("Security attestation missing").length).toBeGreaterThan(0);
+  });
+
+  it("renders intent detail page", async () => {
+    renderAt("/intents/intent-prod-policy");
+    await waitFor(() => {
+      expect(screen.getByText("Intent detail")).toBeTruthy();
+    });
+    expect(screen.getByText("Request review")).toBeTruthy();
+    expect(screen.getAllByText("review-1").length).toBeGreaterThan(0);
   });
 });
