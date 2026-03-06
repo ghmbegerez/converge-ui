@@ -3,16 +3,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from converge_ui.api.auth import AuthMiddleware, init_auth
 from converge_ui.api.routes import router
 from converge_ui.config.settings import load_settings
+from converge_ui.logging import RequestLoggingMiddleware
 
 
 def create_app() -> FastAPI:
     settings = load_settings()
-    app = FastAPI(title="converge-ui", version="0.2.0")
+    app = FastAPI(title="converge-ui", version="0.3.0")
     app.state.frontend_dist_dir = settings.frontend_dist_dir
     app.include_router(router)
 
@@ -38,6 +41,18 @@ def create_app() -> FastAPI:
             },
             status_code=503,
         )
+
+    # Middleware — last added = outermost (processed first)
+    app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(AuthMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    init_auth()
 
     return app
 

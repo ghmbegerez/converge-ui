@@ -1,8 +1,12 @@
+import os
 from pathlib import Path
+
+os.environ["CONVERGE_UI_AUTH_REQUIRED"] = "0"
 
 from fastapi.testclient import TestClient
 
 import converge_ui.api.routes as routes
+from converge_ui.api.auth import init_auth
 from converge_ui.app import app
 from converge_ui.bff.service import ControlPlaneService, SnapshotCache
 from converge_ui.config.settings import Settings
@@ -193,6 +197,8 @@ client = TestClient(app)
 
 
 def setup_module() -> None:
+    os.environ["CONVERGE_UI_AUTH_REQUIRED"] = "0"
+    init_auth()
     routes.get_control_plane_service = lambda: FakeService()
 
 

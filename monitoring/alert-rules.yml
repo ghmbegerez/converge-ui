@@ -1,0 +1,69 @@
+# Prometheus alert rules for the Converge platform
+# Import into Prometheus or Grafana alerting.
+
+groups:
+  - name: converge-platform
+    interval: 30s
+    rules:
+      # --- Service availability ---
+      - alert: ServiceDown
+        expr: up{job=~"converge|orchestrator|ui"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+
+      # --- Orchestrator: high block rate ---
+      - alert: HighBlockRate
+        expr: orchestrator_block_rate > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orchestrator block rate is {{ $value | humanizePercentage }}"
+          description: "More than 25% of jobs are blocked. Investigate dependency failures or policy issues."
+
+      # --- Orchestrator: stale workers ---
+      - alert: StaleRunningJobs
+        expr: orchestrator_jobs_by_status{status="running"} > 0 and orchestrator_throughput_per_hour == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Running jobs but zero throughput"
+          description: "Jobs are in running state but no completions in 15 minutes. Workers may be stalled."
+
+      # --- Converge: high error rate ---
+      - alert: HighErrorRate
+        expr: rate(converge_http_errors_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Converge 5xx error rate elevated"
+          description: "More than 0.5 errors/sec on {{ $labels.method }} {{ $labels.path }}."
+
+      # --- Converge: rate limiting active ---
+      - alert: RateLimitingActive
+        expr: rate(converge_rate_limit_throttled_global[5m]) > 1
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Rate limiting is actively throttling requests"
+          description: "Global throttle rate > 1/sec. Check for runaway clients."
+
+      # --- Converge: high latency ---
+      - alert: HighLatency
+        expr: >
+          (rate(converge_http_request_duration_seconds_sum[5m])
+           / rate(converge_http_request_duration_seconds_count[5m]))
+          > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Converge avg response time > 2s on {{ $labels.path }}"
+          description: "Average latency for {{ $labels.method }} {{ $labels.path }} exceeds 2 seconds."

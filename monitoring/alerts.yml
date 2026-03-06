@@ -1,0 +1,48 @@
+# Converge Platform alert rules for Prometheus/Alertmanager
+#
+# Import into Prometheus via rule_files in prometheus.yml
+
+groups:
+  - name: converge_platform
+    interval: 30s
+    rules:
+      # Service down for more than 2 minutes
+      - alert: ServiceDown
+        expr: up{job=~"converge|orchestrator|ui"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} is down"
+          description: "{{ $labels.job }} at {{ $labels.instance }} has been unreachable for 2+ minutes."
+
+      # High 5xx error rate on converge
+      - alert: HighErrorRate
+        expr: rate(converge_http_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate on converge"
+          description: "converge is producing {{ $value | humanize }} 5xx errors/sec on {{ $labels.method }} {{ $labels.path }}."
+
+      # High rate limiting (many requests being throttled)
+      - alert: HighThrottleRate
+        expr: rate(converge_rate_limit_throttled_global[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rate of throttled requests"
+          description: "converge is throttling {{ $value | humanize }} requests/sec. Check for abuse or misconfigured clients."
+
+      # Slow request latency
+      - alert: HighLatency
+        expr: |
+          (rate(converge_http_request_duration_seconds_sum[5m]) / rate(converge_http_request_duration_seconds_count[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High request latency on converge"
+          description: "Average latency for {{ $labels.method }} {{ $labels.path }} is {{ $value | humanize }}s."

@@ -6,6 +6,7 @@ from converge_ui.clients.base import ApiClient
 
 
 class OrchestratorClient(ApiClient):
+    service_name = "orchestrator"
     def is_reachable(self) -> bool:
         return self.health() is not None
 

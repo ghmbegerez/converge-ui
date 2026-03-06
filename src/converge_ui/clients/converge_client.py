@@ -6,6 +6,7 @@ from converge_ui.clients.base import ApiClient
 
 
 class ConvergeClient(ApiClient):
+    service_name = "converge"
     def is_reachable(self) -> bool:
         return self.health() is not None
 

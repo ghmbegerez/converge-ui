@@ -1,0 +1,83 @@
+# =============================================================================
+# Full Converge Platform Stack
+#
+# Runs all three services with health-check dependency ordering:
+#   1. converge     (9876) - core merge coordination engine
+#   2. orchestrator (9989) - agent dispatch layer
+#   3. ui           (9988) - control plane dashboard (depends on 1+2)
+#
+# Usage:
+#   docker compose up --build
+#   docker compose up -d         # detached
+#   curl http://localhost:9988   # open UI
+# =============================================================================
+
+services:
+  converge:
+    build:
+      context: ../converge
+      target: api
+    ports:
+      - "9876:9876"
+    environment:
+      CONVERGE_DB_BACKEND: sqlite
+      CONVERGE_DB_PATH: /data/state.db
+      CONVERGE_AUTH_REQUIRED: "0"
+    volumes:
+      - converge-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9876/health/live')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+  orchestrator:
+    build:
+      context: ../converge-orchestrator
+    ports:
+      - "9989:8787"
+    environment:
+      ORCHESTRATOR_CONVERGE_API_URL: http://converge:9876
+      ORCHESTRATOR_CONVERGE_MODE: api
+      ORCH_AUTH_REQUIRED: "0"
+      ORCH_CORS_ORIGINS: "http://localhost:9988,http://ui:9988"
+    depends_on:
+      converge:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8787/health')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+    ports:
+      - "9988:9988"
+    environment:
+      CONVERGE_BASE_URL: http://converge:9876
+      ORCHESTRATOR_BASE_URL: http://orchestrator:8787
+      CONVERGE_UI_HOST: "0.0.0.0"
+      CONVERGE_UI_PORT: "9988"
+      CONVERGE_UI_AUTH_REQUIRED: "0"
+      CONVERGE_UI_DATA_MODE: hybrid
+    depends_on:
+      converge:
+        condition: service_healthy
+      orchestrator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9988/health/live')"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  converge-data:

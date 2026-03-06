@@ -1,0 +1,37 @@
+# Prometheus scrape configuration for Converge Platform
+#
+# converge exposes Prometheus text format at /metrics
+# orchestrator exposes JSON metrics at /api/v1/metrics (needs json_exporter)
+# UI exposes health at /health/live (up/down probe)
+#
+# Usage:
+#   1. Copy this file to your Prometheus config directory
+#   2. Adjust targets to match your deployment (Docker hostnames or IPs)
+#   3. Reload Prometheus: kill -HUP $(pidof prometheus)
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Converge — native Prometheus metrics
+  - job_name: converge
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["converge:9876"]
+
+  # Orchestrator — health probe (up/down)
+  - job_name: orchestrator
+    metrics_path: /health
+    static_configs:
+      - targets: ["orchestrator:8787"]
+
+  # UI — health probe (up/down)
+  - job_name: ui
+    metrics_path: /health/live
+    static_configs:
+      - targets: ["ui:9988"]
+
+# Alert rules
+rule_files:
+  - alerts.yml

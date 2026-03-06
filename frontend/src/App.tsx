@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useLocation, useParams } from "react-rout
 
 import { ConnectivityBanner } from "./components/ConnectivityBanner";
 import { DataTable } from "./components/DataTable";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { LifecycleRail } from "./components/LifecycleRail";
 import { StaleDataBanner } from "./components/StaleDataBanner";
 import { downloadTextFile, formatValue, toCsv, toJson, toneFor } from "./lib/ui";
@@ -1021,12 +1022,12 @@ export function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<OverviewPage />} />
-      <Route path="/operations" element={<OperationsPage />} />
-      <Route path="/reviews" element={<ReviewsPage />} />
-      <Route path="/compliance" element={<CompliancePage />} />
-      <Route path="/jobs/:jobId" element={<JobPage />} />
-      <Route path="/intents/:intentId" element={<IntentPage />} />
+      <Route path="/" element={<ErrorBoundary pageName="Overview"><OverviewPage /></ErrorBoundary>} />
+      <Route path="/operations" element={<ErrorBoundary pageName="Operations"><OperationsPage /></ErrorBoundary>} />
+      <Route path="/reviews" element={<ErrorBoundary pageName="Reviews"><ReviewsPage /></ErrorBoundary>} />
+      <Route path="/compliance" element={<ErrorBoundary pageName="Compliance"><CompliancePage /></ErrorBoundary>} />
+      <Route path="/jobs/:jobId" element={<ErrorBoundary pageName="Job Detail"><JobPage /></ErrorBoundary>} />
+      <Route path="/intents/:intentId" element={<ErrorBoundary pageName="Intent Detail"><IntentPage /></ErrorBoundary>} />
     </Routes>
   );
 }
