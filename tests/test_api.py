@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import converge_ui.api.routes as routes
 from converge_ui.api.auth import init_auth
-from converge_ui.app import app
+from converge_ui.app import app, create_app
 from converge_ui.bff.service import ControlPlaneService, SnapshotCache
 from converge_ui.config.settings import Settings
 
@@ -182,6 +182,7 @@ class NullConverge:
 
 def build_settings(mode: str = "hybrid") -> Settings:
     return Settings(
+        environment="test",
         host="127.0.0.1",
         port=9988,
         converge_base_url="http://127.0.0.1:9876",
@@ -190,6 +191,11 @@ def build_settings(mode: str = "hybrid") -> Settings:
         request_timeout_seconds=1.0,
         frontend_dist_dir=Path("frontend/dist"),
         frontend_fallback_dir=Path("src/converge_ui/web"),
+        cors_origins=("http://127.0.0.1:5173",),
+        rate_limit_enabled=False,
+        rate_limit_rpm=120,
+        allow_fallback_ui=True,
+        trust_proxy_headers=False,
     )
 
 
@@ -290,7 +296,8 @@ def test_review_actions_contract() -> None:
 
 
 def test_root_serves_html_shell() -> None:
-    r = client.get("/")
+    shell_client = TestClient(create_app())
+    r = shell_client.get("/")
     assert r.status_code == 200
     assert "text/html" in r.headers["content-type"]
 

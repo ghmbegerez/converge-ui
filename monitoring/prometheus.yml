@@ -2,7 +2,7 @@
 #
 # converge exposes Prometheus text format at /metrics
 # orchestrator exposes JSON metrics at /api/v1/metrics (needs json_exporter)
-# UI exposes health at /health/live (up/down probe)
+# UI exposes Prometheus text format at /metrics
 #
 # Usage:
 #   1. Copy this file to your Prometheus config directory
@@ -26,9 +26,9 @@ scrape_configs:
     static_configs:
       - targets: ["orchestrator:8787"]
 
-  # UI — health probe (up/down)
+  # UI — native Prometheus metrics
   - job_name: ui
-    metrics_path: /health/live
+    metrics_path: /metrics
     static_configs:
       - targets: ["ui:9988"]
 

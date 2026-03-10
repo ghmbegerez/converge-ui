@@ -10,3 +10,11 @@ tests
 docs
 .github
 *.md
+!README.md
+.env
+.env.*
+.coverage
+htmlcov/
+.venv
+venv
+node_modules

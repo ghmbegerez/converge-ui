@@ -30,7 +30,7 @@ from starlette.responses import Response
 ROLE_RANK: dict[str, int] = {"viewer": 0, "operator": 1, "admin": 2}
 
 # Paths that bypass authentication entirely.
-PUBLIC_PATHS: set[str] = {"/health/live", "/health/ready"}
+PUBLIC_PATHS: set[str] = {"/health/live", "/health/ready", "/metrics"}
 
 # Minimum role required per route pattern.
 API_ROLE_MAP: dict[str, str] = {
@@ -39,6 +39,7 @@ API_ROLE_MAP: dict[str, str] = {
     "GET /api/v1/jobs": "viewer",
     "GET /api/v1/reviews": "viewer",
     "GET /api/v1/compliance": "viewer",
+    "GET /api/v1/system/debug": "operator",
     "POST /api/v1/actions/refresh": "operator",
     "POST /api/v1/actions/jobs/*/retry": "operator",
     "POST /api/v1/actions/reviews": "operator",
@@ -66,6 +67,7 @@ class Principal:
 # ---------------------------------------------------------------------------
 # Key registry
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class _KeyEntry:
@@ -105,9 +107,7 @@ def init_auth() -> None:
         key, role, actor = segments[0], segments[1], segments[2]
         if role not in ROLE_RANK:
             continue
-        entries.append(
-            _KeyEntry(key_hash=_hash_key(key), role=role, actor=actor, prefix=key[:4])
-        )
+        entries.append(_KeyEntry(key_hash=_hash_key(key), role=role, actor=actor, prefix=key[:4]))
     _registry = entries
 
 
@@ -172,9 +172,7 @@ def minimum_role_for(method: str, path: str) -> str:
 class AuthMiddleware(BaseHTTPMiddleware):
     """FastAPI middleware that enforces API key authentication."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
         method = request.method
 
@@ -186,14 +184,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         try:
-            auth_header = request.headers.get("authorization") or request.headers.get(
-                "x-api-key"
-            )
+            auth_header = request.headers.get("authorization") or request.headers.get("x-api-key")
             principal = resolve_principal(auth_header)
         except ValueError as exc:
             return JSONResponse(
                 status_code=401,
-                content={"error": str(exc)},
+                content={"detail": str(exc)},
             )
 
         if principal is not None:
@@ -201,9 +197,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             if not principal.has_role(min_role):
                 return JSONResponse(
                     status_code=403,
-                    content={
-                        "error": f"Insufficient role: {principal.role!r} < {min_role!r}"
-                    },
+                    content={"detail": f"Insufficient role: {principal.role!r} < {min_role!r}"},
                 )
             request.state.principal = principal
 

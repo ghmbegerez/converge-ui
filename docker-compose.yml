@@ -60,12 +60,19 @@ services:
     ports:
       - "9988:9988"
     environment:
+      CONVERGE_UI_ENV: production
       CONVERGE_BASE_URL: http://converge:9876
       ORCHESTRATOR_BASE_URL: http://orchestrator:8787
       CONVERGE_UI_HOST: "0.0.0.0"
       CONVERGE_UI_PORT: "9988"
+      CONVERGE_UI_FRONTEND_DIST: /app/frontend/dist
       CONVERGE_UI_AUTH_REQUIRED: "0"
       CONVERGE_UI_DATA_MODE: hybrid
+      CONVERGE_UI_ALLOW_FALLBACK_UI: "0"
+      CONVERGE_UI_TRUST_PROXY_HEADERS: "0"
+      CONVERGE_UI_CORS_ORIGINS: "http://localhost:9988"
+      CONVERGE_UI_RATE_LIMIT_ENABLED: "1"
+      CONVERGE_UI_RATE_LIMIT_RPM: "240"
     depends_on:
       converge:
         condition: service_healthy

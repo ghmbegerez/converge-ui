@@ -18,9 +18,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install ruff pytest
+        run: pip install -e ".[dev]"
 
       - name: Lint
         run: ruff check src/ tests/
@@ -28,8 +26,14 @@ jobs:
       - name: Format check
         run: ruff format --check src/ tests/
 
-      - name: Test
-        run: pytest tests/ -v
+      - name: Type check (mypy)
+        run: mypy src/converge_ui/
+
+      - name: Test with coverage
+        run: |
+          python -m pytest tests/ -v --tb=short \
+            --cov=converge_ui --cov-report=term-missing --cov-report=xml \
+            --cov-fail-under=68
 
       - name: Verify lock file is up-to-date
         run: |
@@ -55,6 +59,13 @@ jobs:
 
       - name: Audit Python dependencies
         run: pip-audit
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: SAST scan (bandit)
+        run: bandit -r src/converge_ui/ -ll -ii
+        continue-on-error: true
 
       - uses: actions/setup-node@v4
         with:
@@ -88,6 +99,9 @@ jobs:
 
       - name: Type check
         run: npx tsc --noEmit
+
+      - name: Lint (ESLint)
+        run: npx eslint src/
 
       - name: Test
         run: npm test

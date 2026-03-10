@@ -10,16 +10,23 @@ from fastapi.staticfiles import StaticFiles
 from converge_ui.api.auth import AuthMiddleware, init_auth
 from converge_ui.api.routes import router
 from converge_ui.config.settings import load_settings
+from converge_ui.http import RateLimitMiddleware, SecurityHeadersMiddleware, app_lifespan
 from converge_ui.logging import RequestLoggingMiddleware
+from converge_ui.rate_limit import init_rate_limit
 
 
 def create_app() -> FastAPI:
     settings = load_settings()
-    app = FastAPI(title="converge-ui", version="0.3.0")
+    app = FastAPI(title="converge-ui", version="0.3.0", lifespan=app_lifespan)
     app.state.frontend_dist_dir = settings.frontend_dist_dir
+    app.state.frontend_fallback_enabled = settings.allow_fallback_ui
     app.include_router(router)
 
-    ui_dir = _resolve_ui_dir(settings.frontend_dist_dir, settings.frontend_fallback_dir)
+    ui_dir = _resolve_ui_dir(
+        settings.frontend_dist_dir,
+        settings.frontend_fallback_dir,
+        allow_fallback=settings.allow_fallback_ui,
+    )
     assets_dir = ui_dir / "assets"
     if assets_dir.exists():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
@@ -44,23 +51,33 @@ def create_app() -> FastAPI:
 
     # Middleware — last added = outermost (processed first)
     app.add_middleware(RequestLoggingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(AuthMiddleware)
+
+    allowed_origins = list(settings.cors_origins)
+    allow_creds = "*" not in allowed_origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=allowed_origins,
+        allow_credentials=allow_creds,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    app.add_middleware(RateLimitMiddleware, trust_proxy_headers=settings.trust_proxy_headers)
+
     init_auth()
+    init_rate_limit(enabled=settings.rate_limit_enabled, max_requests=settings.rate_limit_rpm)
 
     return app
 
 
-def _resolve_ui_dir(frontend_dist_dir: Path, frontend_fallback_dir: Path) -> Path:
+def _resolve_ui_dir(frontend_dist_dir: Path, frontend_fallback_dir: Path, *, allow_fallback: bool) -> Path:
     if (frontend_dist_dir / "index.html").exists():
         return frontend_dist_dir
-    return frontend_fallback_dir
+    if allow_fallback:
+        return frontend_fallback_dir
+    return frontend_dist_dir
 
 
 app = create_app()

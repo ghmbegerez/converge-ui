@@ -3,9 +3,11 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
 
 from converge_ui.bff.service import get_control_plane_service
+from converge_ui.observability import render_prometheus, stats
 
 router = APIRouter()
 
@@ -40,9 +42,7 @@ class ReviewCreateRequest(BaseModel):
     @classmethod
     def trigger_valid(cls, v: str) -> str:
         if v not in _TRIGGER_VALUES:
-            raise ValueError(
-                f"trigger must be one of {sorted(_TRIGGER_VALUES)}"
-            )
+            raise ValueError(f"trigger must be one of {sorted(_TRIGGER_VALUES)}")
         return v
 
     @field_validator("reviewer")
@@ -86,9 +86,7 @@ class ReviewCompleteRequest(BaseModel):
     @classmethod
     def resolution_valid(cls, v: str) -> str:
         if v not in _RESOLUTION_VALUES:
-            raise ValueError(
-                f"resolution must be one of {sorted(_RESOLUTION_VALUES)}"
-            )
+            raise ValueError(f"resolution must be one of {sorted(_RESOLUTION_VALUES)}")
         return v
 
     @field_validator("notes")
@@ -146,8 +144,34 @@ def health_live() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-def health_ready() -> dict[str, str]:
-    return {"status": "ready"}
+def health_ready() -> dict:
+    service = get_control_plane_service()
+    checks: dict[str, str] = {}
+    status = "ready"
+    try:
+        if hasattr(service, "orchestrator") and service.orchestrator.is_reachable():
+            checks["orchestrator"] = "ok"
+        else:
+            checks["orchestrator"] = "unreachable"
+            status = "degraded"
+    except Exception:
+        checks["orchestrator"] = "error"
+        status = "degraded"
+    try:
+        if hasattr(service, "converge") and service.converge.is_reachable():
+            checks["converge"] = "ok"
+        else:
+            checks["converge"] = "unreachable"
+            status = "degraded"
+    except Exception:
+        checks["converge"] = "error"
+        status = "degraded"
+    return {"status": status, **checks}
+
+
+@router.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
+def metrics() -> str:
+    return render_prometheus()
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +214,13 @@ def reviews() -> dict:
 @router.get("/api/v1/compliance")
 def compliance() -> dict:
     return get_control_plane_service().get_compliance()
+
+
+@router.get("/api/v1/system/debug")
+def system_debug() -> dict:
+    return {
+        "stats": stats().snapshot(),
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -25,14 +25,18 @@ class ApiClient:
             )
             response.raise_for_status()
             upstream_call(
-                self.service_name, "GET", path,
+                self.service_name,
+                "GET",
+                path,
                 status=response.status_code,
                 duration_ms=(time.monotonic() - start) * 1000,
             )
             return response.json()
-        except Exception as exc:
+        except (httpx.HTTPStatusError, httpx.RequestError, ValueError) as exc:
             upstream_call(
-                self.service_name, "GET", path,
+                self.service_name,
+                "GET",
+                path,
                 status=None,
                 duration_ms=(time.monotonic() - start) * 1000,
                 error=str(exc),
@@ -49,14 +53,18 @@ class ApiClient:
             )
             response.raise_for_status()
             upstream_call(
-                self.service_name, "POST", path,
+                self.service_name,
+                "POST",
+                path,
                 status=response.status_code,
                 duration_ms=(time.monotonic() - start) * 1000,
             )
             return response.json()
-        except Exception as exc:
+        except (httpx.HTTPStatusError, httpx.RequestError, ValueError) as exc:
             upstream_call(
-                self.service_name, "POST", path,
+                self.service_name,
+                "POST",
+                path,
                 status=None,
                 duration_ms=(time.monotonic() - start) * 1000,
                 error=str(exc),
