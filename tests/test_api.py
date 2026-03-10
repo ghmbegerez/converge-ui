@@ -356,3 +356,86 @@ def test_refresh_returns_demo_unavailable_when_endpoint_missing() -> None:
     payload = service.refresh()
     assert payload["status"] == "unavailable"
     assert payload["data_source"] == "demo"
+
+
+# ---------------------------------------------------------------------------
+# Error path tests
+# ---------------------------------------------------------------------------
+
+
+def test_retry_invalid_job_id_rejected() -> None:
+    r = client.post("/api/v1/actions/jobs/job id with spaces/retry")
+    assert r.status_code == 400
+
+
+def test_review_create_empty_intent_id_rejected() -> None:
+    r = client.post("/api/v1/actions/reviews", json={"intent_id": ""})
+    assert r.status_code == 422
+
+
+def test_review_create_invalid_trigger_rejected() -> None:
+    r = client.post("/api/v1/actions/reviews", json={"intent_id": "intent-1", "trigger": "invalid"})
+    assert r.status_code == 422
+
+
+def test_review_create_priority_out_of_range_rejected() -> None:
+    r = client.post("/api/v1/actions/reviews", json={"intent_id": "intent-1", "priority": 99})
+    assert r.status_code == 422
+
+
+def test_review_assign_empty_reviewer_rejected() -> None:
+    r = client.post("/api/v1/actions/reviews/review-1/assign", json={"reviewer": ""})
+    assert r.status_code == 422
+
+
+def test_review_complete_invalid_resolution_rejected() -> None:
+    r = client.post("/api/v1/actions/reviews/review-1/complete", json={"resolution": "yolo"})
+    assert r.status_code == 422
+
+
+def test_job_detail_invalid_id_format() -> None:
+    r = client.get("/api/v1/jobs/job%20with%20spaces")
+    assert r.status_code == 400
+
+
+def test_intent_detail_invalid_id_format() -> None:
+    r = client.get("/api/v1/intents/intent%20bad%20id")
+    assert r.status_code == 400
+
+
+def test_review_assign_invalid_task_id() -> None:
+    r = client.post("/api/v1/actions/reviews/review bad id/assign", json={"reviewer": "ops"})
+    assert r.status_code == 400
+
+
+def test_system_debug_returns_stats() -> None:
+    r = client.get("/api/v1/system/debug")
+    assert r.status_code == 200
+    assert "stats" in r.json()
+
+
+def test_jobs_list_contract() -> None:
+    r = client.get("/api/v1/jobs")
+    assert r.status_code == 200
+    payload = r.json()
+    assert "items" in payload
+    assert payload["data_source"] == "real"
+
+
+def test_health_ready_contract() -> None:
+    r = client.get("/health/ready")
+    assert r.status_code == 200
+    assert r.json()["status"] in ("ready", "degraded")
+
+
+def test_retry_job_demo_returns_disabled() -> None:
+    r = client.post("/api/v1/actions/jobs/job-1/retry")
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload["status"] == "disabled"
+
+
+def test_metrics_endpoint() -> None:
+    r = client.get("/metrics")
+    assert r.status_code == 200
+    assert "text/plain" in r.headers["content-type"]

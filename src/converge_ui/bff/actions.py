@@ -29,7 +29,7 @@ class ActionExecutor:
             stats().inc("actions.refresh.real")
             payload = {
                 "status": response.get("status", "ok"),
-                "note": response.get("note", ""),
+                "reason": response.get("note", response.get("reason", "")),
                 "data_source": "real",
             }
             self.cache.set("refresh", payload)
@@ -37,7 +37,7 @@ class ActionExecutor:
         stats().inc("actions.refresh.demo")
         return {
             "status": "unavailable",
-            "note": "Refresh endpoint unavailable in current mode.",
+            "reason": "Refresh endpoint unavailable in current mode.",
             "data_source": "demo",
         }
 

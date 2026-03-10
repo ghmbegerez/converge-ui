@@ -135,7 +135,7 @@ describe("App", () => {
           return Promise.resolve(new Response(JSON.stringify(compliancePayload), { status: 200 }));
         }
         if (url === "/api/v1/actions/refresh" && init?.method === "POST") {
-          return Promise.resolve(new Response(JSON.stringify({ status: "ok", note: "refreshed" }), { status: 200 }));
+          return Promise.resolve(new Response(JSON.stringify({ status: "ok", reason: "refreshed" }), { status: 200 }));
         }
         if (url === "/api/v1/actions/jobs/job-prod-policy/retry" && init?.method === "POST") {
           return Promise.resolve(new Response(JSON.stringify({ status: "disabled", reason: "Retry is not exposed by the current orchestrator API." }), { status: 200 }));
