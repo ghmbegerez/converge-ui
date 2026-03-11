@@ -1,9 +1,11 @@
+import { useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { DataTable } from "../components/DataTable";
 import { StaleDataBanner } from "../components/StaleDataBanner";
+import { useExport } from "../lib/export";
 import { usePersistedState, useSnapshot } from "../lib/hooks";
-import { downloadTextFile, formatValue, toCsv, toJson, toneFor } from "../lib/ui";
+import { formatValue, toneFor } from "../lib/ui";
 import { Frame } from "../lib/layout";
 import type { OperationsPayload } from "../types";
 
@@ -16,60 +18,55 @@ export function OperationsPage() {
   const [riskFilter, setRiskFilter] = usePersistedState("operations:risk", "all");
   const [search, setSearch] = usePersistedState("operations:search", "");
 
-  if (!data) return <Frame><p>{error ?? "Loading..."}</p></Frame>;
-  const snapshot = data;
+  const filteredRows = useMemo(() => {
+    if (!data) return [];
+    const rows = [...data.running, ...data.retry_queue, ...data.blocked];
+    return rows.filter((row) => {
+      const sourceOk = sourceFilter === "all" || data.data_source === sourceFilter;
+      const statusOk = statusFilter === "all" || row.status === statusFilter;
+      const riskOk = riskFilter === "all" || row.risk_level === riskFilter;
+      const haystack = [
+        row.job_id,
+        row.intent_id,
+        row.trace_id,
+        row.agent,
+        row.prompt_preview,
+        row.reason,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const searchOk = !search.trim() || haystack.includes(search.trim().toLowerCase());
+      return sourceOk && statusOk && riskOk && searchOk;
+    });
+  }, [data, sourceFilter, statusFilter, riskFilter, search]);
 
-  const rows = [...snapshot.running, ...snapshot.retry_queue, ...snapshot.blocked];
-  const filteredRows = rows.filter((row) => {
-    const sourceOk = sourceFilter === "all" || snapshot.data_source === sourceFilter;
-    const statusOk = statusFilter === "all" || row.status === statusFilter;
-    const riskOk = riskFilter === "all" || row.risk_level === riskFilter;
-    const haystack = [
-      row.job_id,
-      row.intent_id,
-      row.trace_id,
-      row.agent,
-      row.prompt_preview,
-      row.reason,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const searchOk = !search.trim() || haystack.includes(search.trim().toLowerCase());
-    return sourceOk && statusOk && riskOk && searchOk;
+  const csvColumns = useMemo(() => ["job_id", "status", "agent", "risk_level", "risk_score", "trace_id", "intent_id", "reason"], []);
+  const csvRowMapper = useCallback((row: (typeof filteredRows)[number]) => ({
+    job_id: row.job_id,
+    status: row.status,
+    agent: row.agent,
+    risk_level: row.risk_level,
+    risk_score: row.risk_score,
+    trace_id: row.trace_id,
+    intent_id: row.intent_id,
+    reason: row.reason,
+  }), []);
+  const jsonMeta = useMemo(() => ({
+    generated_at: data?.generated_at,
+    data_source: data?.data_source,
+  }), [data?.generated_at, data?.data_source]);
+
+  const { exportJson: exportOperationsJson, exportCsv: exportOperationsCsv } = useExport({
+    filenameBase: "converge-ui-operations",
+    rows: filteredRows,
+    jsonMeta,
+    csvRowMapper,
+    csvColumns,
   });
 
-  function exportOperationsJson() {
-    downloadTextFile(
-      "converge-ui-operations.json",
-      toJson({
-        generated_at: snapshot.generated_at,
-        data_source: snapshot.data_source,
-        items: filteredRows,
-      }),
-      "application/json",
-    );
-  }
-
-  function exportOperationsCsv() {
-    downloadTextFile(
-      "converge-ui-operations.csv",
-      toCsv(
-        filteredRows.map((row) => ({
-          job_id: row.job_id,
-          status: row.status,
-          agent: row.agent,
-          risk_level: row.risk_level,
-          risk_score: row.risk_score,
-          trace_id: row.trace_id,
-          intent_id: row.intent_id,
-          reason: row.reason,
-        })),
-        ["job_id", "status", "agent", "risk_level", "risk_score", "trace_id", "intent_id", "reason"],
-      ),
-      "text/csv;charset=utf-8",
-    );
-  }
+  if (!data) return <Frame><p>{error ?? "Loading..."}</p></Frame>;
+  const snapshot = data;
 
   return (
     <Frame>

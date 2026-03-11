@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,7 +32,7 @@ class ControlPlaneService:
         timeout = settings.request_timeout_seconds
         self.orchestrator = orchestrator or OrchestratorClient(settings.orchestrator_base_url, timeout)
         self.converge = converge or ConvergeClient(settings.converge_base_url, timeout)
-        self.cache = cache or SnapshotCache()
+        self.cache = cache or SnapshotCache(ttl_seconds=settings.cache_ttl_seconds)
         self.actions = ActionExecutor(
             settings,
             orchestrator=self.orchestrator,
@@ -47,14 +48,35 @@ class ControlPlaneService:
 
     def get_overview(self) -> dict[str, Any]:
         state_bundle = self.provider.resolve_state()
-        operations_bundle = self._resolve_operations(state_bundle)
-        summary = self.converge.summary()
-        dashboard = self.converge.dashboard()
-        dashboard_alerts = self.converge.dashboard_alerts()
-        compliance_report = self.converge.compliance_report()
-        reviews_summary = self.converge.reviews_summary()
-        gate = self.converge.risk_gate_report()
-        converge_health = None if self.settings.data_mode == "demo" else self.converge.health()
+        # Parallelize independent converge calls
+        futures: dict[str, Any] = {}
+        with ThreadPoolExecutor(max_workers=7) as pool:
+            futures = {
+                "summary": pool.submit(self.converge.summary),
+                "dashboard": pool.submit(self.converge.dashboard),
+                "dashboard_alerts": pool.submit(self.converge.dashboard_alerts),
+                "compliance_report": pool.submit(self.converge.compliance_report),
+                "reviews_summary": pool.submit(self.converge.reviews_summary),
+                "gate": pool.submit(self.converge.risk_gate_report),
+            }
+            if self.settings.data_mode != "demo":
+                futures["health"] = pool.submit(self.converge.health)
+            # Resolve operations while converge calls execute
+            operations_bundle = self._resolve_operations(state_bundle)
+            # Collect results
+            results: dict[str, Any] = {}
+            for key, future in futures.items():
+                try:
+                    results[key] = future.result()
+                except Exception:
+                    results[key] = None
+        summary = results["summary"]
+        dashboard = results["dashboard"]
+        dashboard_alerts = results["dashboard_alerts"]
+        compliance_report = results["compliance_report"]
+        reviews_summary = results["reviews_summary"]
+        gate = results["gate"]
+        converge_health = results.get("health")
         services = build_services(state_bundle, summary, converge_health, data_mode=self.settings.data_mode)
         counts = state_bundle["payload"]["counts"]
         blocked = operations_bundle["payload"]["blocked"]

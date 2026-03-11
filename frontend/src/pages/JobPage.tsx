@@ -47,6 +47,9 @@ export function JobPage() {
   async function handleRetry() {
     const jobIdForAction = snapshot.job?.id;
     if (!jobIdForAction) return;
+    if (snapshot.operator_actions?.retry?.requires_confirmation) {
+      if (!window.confirm("Retry this job? This will re-queue the job for another attempt.")) return;
+    }
     const payload = await api<ActionResponse>(`/api/v1/actions/jobs/${jobIdForAction}/retry`, { method: "POST" });
     setActionMessage(payload.reason ?? payload.status);
   }

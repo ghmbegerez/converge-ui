@@ -7,6 +7,16 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, field_validator
 
 from converge_ui.bff.service import get_control_plane_service
+from converge_ui.core.models import (
+    ActionResponse,
+    ComplianceResponse,
+    IntentDetailResponse,
+    JobDetailResponse,
+    JobsListResponse,
+    OperationsResponse,
+    OverviewResponse,
+    ReviewsResponse,
+)
 from converge_ui.observability import render_prometheus, stats
 
 router = APIRouter()
@@ -180,40 +190,40 @@ def metrics() -> str:
 
 
 @router.get("/api/v1/overview")
-def overview() -> dict:
-    return get_control_plane_service().get_overview()
+def overview() -> OverviewResponse:
+    return OverviewResponse(**get_control_plane_service().get_overview())
 
 
 @router.get("/api/v1/operations")
-def operations() -> dict:
-    return get_control_plane_service().get_operations()
+def operations() -> OperationsResponse:
+    return OperationsResponse(**get_control_plane_service().get_operations())
 
 
 @router.get("/api/v1/jobs")
-def list_jobs() -> dict:
-    return get_control_plane_service().list_jobs()
+def list_jobs() -> JobsListResponse:
+    return JobsListResponse(**get_control_plane_service().list_jobs())
 
 
 @router.get("/api/v1/jobs/{job_id}")
-def job_detail(job_id: str) -> dict:
+def job_detail(job_id: str) -> JobDetailResponse:
     _validate_id(job_id, "job_id")
-    return get_control_plane_service().get_job_detail(job_id)
+    return JobDetailResponse(**get_control_plane_service().get_job_detail(job_id))
 
 
 @router.get("/api/v1/intents/{intent_id}")
-def intent_detail(intent_id: str) -> dict:
+def intent_detail(intent_id: str) -> IntentDetailResponse:
     _validate_id(intent_id, "intent_id")
-    return get_control_plane_service().get_intent_detail(intent_id)
+    return IntentDetailResponse(**get_control_plane_service().get_intent_detail(intent_id))
 
 
 @router.get("/api/v1/reviews")
-def reviews() -> dict:
-    return get_control_plane_service().get_reviews()
+def reviews() -> ReviewsResponse:
+    return ReviewsResponse(**get_control_plane_service().get_reviews())
 
 
 @router.get("/api/v1/compliance")
-def compliance() -> dict:
-    return get_control_plane_service().get_compliance()
+def compliance() -> ComplianceResponse:
+    return ComplianceResponse(**get_control_plane_service().get_compliance())
 
 
 @router.get("/api/v1/system/debug")
@@ -229,58 +239,58 @@ def system_debug() -> dict:
 
 
 @router.post("/api/v1/actions/refresh")
-def refresh() -> dict:
-    return get_control_plane_service().refresh()
+def refresh() -> ActionResponse:
+    return ActionResponse(**get_control_plane_service().refresh())
 
 
 @router.post("/api/v1/actions/jobs/{job_id}/retry")
-def retry_job(job_id: str) -> dict:
+def retry_job(job_id: str) -> ActionResponse:
     _validate_id(job_id, "job_id")
-    return get_control_plane_service().retry_job(job_id)
+    return ActionResponse(**get_control_plane_service().retry_job(job_id))
 
 
 @router.post("/api/v1/actions/reviews")
-def request_review(body: ReviewCreateRequest) -> dict:
-    return get_control_plane_service().request_review(
+def request_review(body: ReviewCreateRequest) -> ActionResponse:
+    return ActionResponse(**get_control_plane_service().request_review(
         intent_id=body.intent_id,
         trigger=body.trigger,
         reviewer=body.reviewer,
         priority=body.priority,
-    )
+    ))
 
 
 @router.post("/api/v1/actions/reviews/{task_id}/assign")
-def assign_review(task_id: str, body: ReviewAssignRequest) -> dict:
+def assign_review(task_id: str, body: ReviewAssignRequest) -> ActionResponse:
     _validate_id(task_id, "task_id")
-    return get_control_plane_service().assign_review(
+    return ActionResponse(**get_control_plane_service().assign_review(
         task_id,
         reviewer=body.reviewer,
-    )
+    ))
 
 
 @router.post("/api/v1/actions/reviews/{task_id}/complete")
-def complete_review(task_id: str, body: ReviewCompleteRequest) -> dict:
+def complete_review(task_id: str, body: ReviewCompleteRequest) -> ActionResponse:
     _validate_id(task_id, "task_id")
-    return get_control_plane_service().complete_review(
+    return ActionResponse(**get_control_plane_service().complete_review(
         task_id,
         resolution=body.resolution,
         notes=body.notes,
-    )
+    ))
 
 
 @router.post("/api/v1/actions/reviews/{task_id}/escalate")
-def escalate_review(task_id: str, body: ReviewEscalateRequest) -> dict:
+def escalate_review(task_id: str, body: ReviewEscalateRequest) -> ActionResponse:
     _validate_id(task_id, "task_id")
-    return get_control_plane_service().escalate_review(
+    return ActionResponse(**get_control_plane_service().escalate_review(
         task_id,
         reason=body.reason,
-    )
+    ))
 
 
 @router.post("/api/v1/actions/reviews/{task_id}/cancel")
-def cancel_review(task_id: str, body: ReviewCancelRequest) -> dict:
+def cancel_review(task_id: str, body: ReviewCancelRequest) -> ActionResponse:
     _validate_id(task_id, "task_id")
-    return get_control_plane_service().cancel_review(
+    return ActionResponse(**get_control_plane_service().cancel_review(
         task_id,
         reason=body.reason,
-    )
+    ))

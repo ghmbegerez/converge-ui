@@ -1,7 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypeVar
+
+_T = TypeVar("_T")
+
+
+def demo_guard(settings: Any, fn: Callable[..., _T], *args: Any, default: _T = None, **kwargs: Any) -> _T:  # type: ignore[assignment]
+    """Call *fn* unless settings indicate demo mode; return *default* in demo mode."""
+    if settings.data_mode == "demo":
+        return default
+    return fn(*args, **kwargs)
 
 
 def summary_value(payload: dict[str, Any] | None, key: str, fallback: Any = None) -> Any:
@@ -23,17 +33,33 @@ def merge_source(left: str, right: str) -> str:
 def operator_actions(job: dict[str, Any] | None, intent: dict[str, Any] | None) -> dict[str, Any]:
     retry_enabled = bool(job and job.get("status") in {"blocked", "retry_pending", "failed"})
     return {
-        "refresh": {"enabled": True, "label": "Refresh"},
+        "refresh": {
+            "enabled": True,
+            "label": "Refresh",
+            "requires_confirmation": False,
+        },
         "retry": {
             "enabled": retry_enabled,
             "label": "Retry job",
             "reason": None if retry_enabled else "Retry available only for blocked or retry-pending jobs.",
+            "requires_confirmation": True,
         },
         "view_intent": {
             "enabled": bool(intent),
             "label": "Open intent",
             "reason": None if intent else "No converge intent linked to this job.",
+            "requires_confirmation": False,
         },
+    }
+
+
+def review_actions() -> dict[str, Any]:
+    """Action metadata for the reviews table."""
+    return {
+        "assign": {"label": "Assign", "requires_confirmation": False},
+        "complete": {"label": "Complete", "requires_confirmation": True},
+        "escalate": {"label": "Escalate", "requires_confirmation": True},
+        "cancel": {"label": "Cancel", "requires_confirmation": True},
     }
 
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from converge_ui.bff.cache import SnapshotCache
+from converge_ui.bff.helpers import demo_guard
 from converge_ui.clients.converge_client import ConvergeClient
 from converge_ui.clients.orchestrator_client import OrchestratorClient
 from converge_ui.config.settings import Settings
@@ -22,6 +23,9 @@ class ActionExecutor:
         self.orchestrator = orchestrator
         self.converge = converge
         self.cache = cache
+
+    def _call(self, fn: Any, *args: Any, default: Any = None, **kwargs: Any) -> Any:
+        return demo_guard(self.settings, fn, *args, default=default, **kwargs)
 
     def refresh(self) -> dict[str, Any]:
         response = self.orchestrator.refresh()
@@ -69,7 +73,8 @@ class ActionExecutor:
         reviewer: str | None = None,
         priority: int | None = None,
     ) -> dict[str, Any]:
-        response = None if self.settings.data_mode == "demo" else self.converge.request_review(
+        response = self._call(
+            self.converge.request_review,
             intent_id=intent_id,
             trigger=trigger,
             reviewer=reviewer,
@@ -93,7 +98,7 @@ class ActionExecutor:
         }
 
     def assign_review(self, task_id: str, *, reviewer: str) -> dict[str, Any]:
-        response = None if self.settings.data_mode == "demo" else self.converge.assign_review(task_id, reviewer=reviewer)
+        response = self._call(self.converge.assign_review, task_id, reviewer=reviewer)
         if response is not None:
             stats().inc("actions.review.assign.real")
             return {"status": "ok", "review": response, "data_source": "real"}
@@ -105,7 +110,8 @@ class ActionExecutor:
         }
 
     def complete_review(self, task_id: str, *, resolution: str = "approved", notes: str = "") -> dict[str, Any]:
-        response = None if self.settings.data_mode == "demo" else self.converge.complete_review(
+        response = self._call(
+            self.converge.complete_review,
             task_id,
             resolution=resolution,
             notes=notes,
@@ -121,7 +127,7 @@ class ActionExecutor:
         }
 
     def escalate_review(self, task_id: str, *, reason: str = "sla_breach") -> dict[str, Any]:
-        response = None if self.settings.data_mode == "demo" else self.converge.escalate_review(task_id, reason=reason)
+        response = self._call(self.converge.escalate_review, task_id, reason=reason)
         if response is not None:
             stats().inc("actions.review.escalate.real")
             return {"status": "ok", "review": response, "data_source": "real"}
@@ -133,7 +139,7 @@ class ActionExecutor:
         }
 
     def cancel_review(self, task_id: str, *, reason: str = "") -> dict[str, Any]:
-        response = None if self.settings.data_mode == "demo" else self.converge.cancel_review(task_id, reason=reason)
+        response = self._call(self.converge.cancel_review, task_id, reason=reason)
         if response is not None:
             stats().inc("actions.review.cancel.real")
             return {"status": "ok", "review": response, "data_source": "real"}

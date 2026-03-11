@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from converge_ui.logging import upstream_call
+from converge_ui.observability import upstream_latency
 
 
 class ApiClient:
@@ -24,21 +25,25 @@ class ApiClient:
                 timeout=self.timeout_seconds,
             )
             response.raise_for_status()
+            duration = time.monotonic() - start
+            upstream_latency.observe(duration, service=self.service_name, method="GET", path=path)
             upstream_call(
                 self.service_name,
                 "GET",
                 path,
                 status=response.status_code,
-                duration_ms=(time.monotonic() - start) * 1000,
+                duration_ms=duration * 1000,
             )
             return response.json()
         except (httpx.HTTPStatusError, httpx.RequestError, ValueError) as exc:
+            duration = time.monotonic() - start
+            upstream_latency.observe(duration, service=self.service_name, method="GET", path=path)
             upstream_call(
                 self.service_name,
                 "GET",
                 path,
                 status=None,
-                duration_ms=(time.monotonic() - start) * 1000,
+                duration_ms=duration * 1000,
                 error=str(exc),
             )
             return None
@@ -52,21 +57,25 @@ class ApiClient:
                 timeout=self.timeout_seconds,
             )
             response.raise_for_status()
+            duration = time.monotonic() - start
+            upstream_latency.observe(duration, service=self.service_name, method="POST", path=path)
             upstream_call(
                 self.service_name,
                 "POST",
                 path,
                 status=response.status_code,
-                duration_ms=(time.monotonic() - start) * 1000,
+                duration_ms=duration * 1000,
             )
             return response.json()
         except (httpx.HTTPStatusError, httpx.RequestError, ValueError) as exc:
+            duration = time.monotonic() - start
+            upstream_latency.observe(duration, service=self.service_name, method="POST", path=path)
             upstream_call(
                 self.service_name,
                 "POST",
                 path,
                 status=None,
-                duration_ms=(time.monotonic() - start) * 1000,
+                duration_ms=duration * 1000,
                 error=str(exc),
             )
             return None

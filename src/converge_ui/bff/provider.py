@@ -11,11 +11,11 @@ from converge_ui.bff.demo_data import (
     get_demo_reviews,
     get_demo_state,
 )
-from converge_ui.bff.helpers import review_summary_from_items
+from converge_ui.bff.helpers import demo_guard, review_summary_from_items
 from converge_ui.clients.converge_client import ConvergeClient
 from converge_ui.clients.orchestrator_client import OrchestratorClient
 from converge_ui.config.settings import Settings
-from converge_ui.observability import stats
+from converge_ui.observability import record_cache_hit, record_cache_miss, record_data_source, stats
 
 
 class DataProvider:
@@ -32,20 +32,32 @@ class DataProvider:
         self.converge = converge
         self.cache = cache
 
+    @property
+    def is_demo(self) -> bool:
+        return self.settings.data_mode == "demo"
+
+    def _call(self, fn: Any, *args: Any, default: Any = None, **kwargs: Any) -> Any:
+        return demo_guard(self.settings, fn, *args, default=default, **kwargs)
+
     def resolve_state(self) -> dict[str, Any]:
-        real_state = None if self.settings.data_mode == "demo" else self.orchestrator.state()
+        real_state = self._call(self.orchestrator.state)
         if real_state is not None:
             stats().inc("provider.state.real")
+            record_data_source("real")
+            record_cache_miss("state")
             payload = {"payload": real_state, "source": "real"}
             self.cache.set("state", payload)
             return payload
         cached = self.cache.get("state")
-        if cached is not None and self.settings.data_mode != "demo":
+        if cached is not None and not self.is_demo:
             stats().inc("provider.state.stale_cache")
+            record_data_source("stale_cache")
+            record_cache_hit("state")
             payload = dict(cached.payload)
             payload["source"] = "stale-cache"
             return payload
         stats().inc("provider.state.demo")
+        record_data_source("demo")
         return {"payload": get_demo_state(), "source": "demo"}
 
     def get_job_payload(self, job_id: str) -> tuple[dict[str, Any] | None, str]:
@@ -61,8 +73,8 @@ class DataProvider:
         return None, "demo"
 
     def get_reviews_payload(self) -> tuple[list[dict[str, Any]], dict[str, Any] | None, str]:
-        reviews = [] if self.settings.data_mode == "demo" else self.converge.reviews()
-        summary = None if self.settings.data_mode == "demo" else self.converge.reviews_summary()
+        reviews = self._call(self.converge.reviews, default=[])
+        summary = self._call(self.converge.reviews_summary)
         if reviews or summary is not None:
             stats().inc("provider.reviews.real")
             return reviews, summary, "real"
@@ -71,8 +83,8 @@ class DataProvider:
         return reviews, review_summary_from_items(reviews), "demo"
 
     def get_compliance_payload(self) -> tuple[dict[str, Any] | None, list[dict[str, Any]], str]:
-        report = None if self.settings.data_mode == "demo" else self.converge.compliance_report()
-        alerts = [] if self.settings.data_mode == "demo" else self.converge.compliance_alerts()
+        report = self._call(self.converge.compliance_report)
+        alerts = self._call(self.converge.compliance_alerts, default=[])
         if report is not None or alerts:
             stats().inc("provider.compliance.real")
             return report, alerts, "real"
@@ -83,12 +95,12 @@ class DataProvider:
     def get_intent_bundle(self, intent_id: str | None) -> dict[str, Any] | None:
         if not intent_id:
             return None
-        intent = None if self.settings.data_mode == "demo" else self.converge.get_intent(intent_id)
-        events = [] if self.settings.data_mode == "demo" else self.converge.get_intent_events(intent_id)
-        risk_review = None if self.settings.data_mode == "demo" else self.converge.get_risk_review(intent_id)
-        reviews = [] if self.settings.data_mode == "demo" else self.converge.reviews(intent_id=intent_id)
-        review_summary = None if self.settings.data_mode == "demo" else self.converge.reviews_summary()
-        compliance_report = None if self.settings.data_mode == "demo" else self.converge.compliance_report()
+        intent = self._call(self.converge.get_intent, intent_id)
+        events = self._call(self.converge.get_intent_events, intent_id, default=[])
+        risk_review = self._call(self.converge.get_risk_review, intent_id)
+        reviews = self._call(self.converge.reviews, intent_id=intent_id, default=[])
+        review_summary = self._call(self.converge.reviews_summary)
+        compliance_report = self._call(self.converge.compliance_report)
         if intent is not None:
             stats().inc("provider.intent.real")
             return {

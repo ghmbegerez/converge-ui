@@ -85,6 +85,13 @@ export type CompliancePayload = {
   data_source: string;
 };
 
+export type OperatorAction = {
+  enabled: boolean;
+  label: string;
+  reason?: string | null;
+  requires_confirmation: boolean;
+};
+
 export type ActionResponse = {
   status: string;
   reason?: string;

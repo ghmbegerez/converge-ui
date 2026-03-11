@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { DataTable } from "../components/DataTable";
 import { StaleDataBanner } from "../components/StaleDataBanner";
+import { useExport } from "../lib/export";
 import { api, usePersistedState, useSnapshot } from "../lib/hooks";
-import { downloadTextFile, formatValue, toCsv, toJson, toneFor } from "../lib/ui";
+import { formatValue, toneFor } from "../lib/ui";
 import { Frame, Metric } from "../lib/layout";
 import type { ActionResponse, ReviewsPayload } from "../types";
 
@@ -17,7 +18,42 @@ export function ReviewsPage() {
   const [statusFilter, setStatusFilter] = usePersistedState("reviews:status", "all");
   const [search, setSearch] = usePersistedState("reviews:search", "");
 
-  async function runReviewAction(path: string, body: Record<string, unknown>) {
+  const filteredReviews = useMemo(() => {
+    if (!data) return [];
+    return data.items.filter((item) => {
+      const statusOk = statusFilter === "all" || item.status === statusFilter;
+      const haystack = [item.task_id, item.intent_id, item.reviewer, item.status]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      const searchOk = !search.trim() || haystack.includes(search.trim().toLowerCase());
+      return statusOk && searchOk;
+    });
+  }, [data, statusFilter, search]);
+
+  const csvColumns = useMemo(() => ["task_id", "intent_id", "status", "reviewer", "priority"], []);
+  const csvRowMapper = useCallback((item: (typeof filteredReviews)[number]) => ({
+    task_id: item.task_id,
+    intent_id: item.intent_id,
+    status: item.status,
+    reviewer: item.reviewer,
+    priority: item.priority,
+  }), []);
+  const jsonMeta = useMemo(() => ({
+    generated_at: data?.generated_at,
+    data_source: data?.data_source,
+  }), [data?.generated_at, data?.data_source]);
+
+  const { exportJson: exportReviewsJson, exportCsv: exportReviewsCsv } = useExport({
+    filenameBase: "converge-ui-reviews",
+    rows: filteredReviews,
+    jsonMeta,
+    csvRowMapper,
+    csvColumns,
+  });
+
+  async function runReviewAction(path: string, body: Record<string, unknown>, opts?: { confirm?: string }) {
+    if (opts?.confirm && !window.confirm(opts.confirm)) return;
     const payload = await api<ActionResponse>(path, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -42,44 +78,6 @@ export function ReviewsPage() {
 
   if (!data) return <Frame><p>{error ?? "Loading..."}</p></Frame>;
   const snapshot = data;
-  const filteredReviews = snapshot.items.filter((item) => {
-    const statusOk = statusFilter === "all" || item.status === statusFilter;
-    const haystack = [item.task_id, item.intent_id, item.reviewer, item.status]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    const searchOk = !search.trim() || haystack.includes(search.trim().toLowerCase());
-    return statusOk && searchOk;
-  });
-
-  function exportReviewsJson() {
-    downloadTextFile(
-      "converge-ui-reviews.json",
-      toJson({
-        generated_at: snapshot.generated_at,
-        data_source: snapshot.data_source,
-        items: filteredReviews,
-      }),
-      "application/json",
-    );
-  }
-
-  function exportReviewsCsv() {
-    downloadTextFile(
-      "converge-ui-reviews.csv",
-      toCsv(
-        filteredReviews.map((item) => ({
-          task_id: item.task_id,
-          intent_id: item.intent_id,
-          status: item.status,
-          reviewer: item.reviewer,
-          priority: item.priority,
-        })),
-        ["task_id", "intent_id", "status", "reviewer", "priority"],
-      ),
-      "text/csv;charset=utf-8",
-    );
-  }
 
   return (
     <Frame>
@@ -188,9 +186,9 @@ export function ReviewsPage() {
               render: (row) => (
                 <div className="table-actions">
                   <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/assign`, { reviewer: "ops-oncall" })}>Assign</button>
-                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/complete`, { resolution: "approved", notes: "approved from UI" })}>Complete</button>
-                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/escalate`, { reason: "sla_breach" })}>Escalate</button>
-                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/cancel`, { reason: "superseded" })}>Cancel</button>
+                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/complete`, { resolution: "approved", notes: "approved from UI" }, { confirm: "Complete this review? This marks it as resolved." })}>Complete</button>
+                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/escalate`, { reason: "sla_breach" }, { confirm: "Escalate this review? This will notify the escalation chain." })}>Escalate</button>
+                  <button onClick={() => runReviewAction(`/api/v1/actions/reviews/${row.task_id}/cancel`, { reason: "superseded" }, { confirm: "Cancel this review? This action cannot be undone." })}>Cancel</button>
                 </div>
               ),
             },

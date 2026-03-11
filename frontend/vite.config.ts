@@ -11,5 +11,14 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    exclude: ["e2e/**", "node_modules/**"],
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: ["src/**/*.test.*", "src/**/*.spec.*"],
+      thresholds: {
+        statements: 80,
+      },
+    },
   },
 });

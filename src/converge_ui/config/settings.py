@@ -26,6 +26,7 @@ class Settings:
     cors_origins: tuple[str, ...]
     rate_limit_enabled: bool
     rate_limit_rpm: int
+    cache_ttl_seconds: float
     allow_fallback_ui: bool
     trust_proxy_headers: bool
 
@@ -83,6 +84,7 @@ def load_settings() -> Settings:
         cors_origins=_load_cors_origins(),
         rate_limit_enabled=_bool_env("CONVERGE_UI_RATE_LIMIT_ENABLED", default=True),
         rate_limit_rpm=int(os.environ.get("CONVERGE_UI_RATE_LIMIT_RPM", "120")),
+        cache_ttl_seconds=float(os.environ.get("CONVERGE_UI_CACHE_TTL_SECONDS", "120")),
         allow_fallback_ui=allow_fallback_ui,
         trust_proxy_headers=_bool_env("CONVERGE_UI_TRUST_PROXY_HEADERS", default=environment in {"staging", "production"}),
     ))

@@ -17,6 +17,10 @@ export function usePersistedState(key: string, initialValue: string) {
 
 export async function api<T = Record<string, unknown>>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
+  if (response.status === 401) {
+    window.dispatchEvent(new CustomEvent("auth:expired"));
+    throw new Error("Session expired. Please refresh the page.");
+  }
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
@@ -29,6 +33,7 @@ export function useSnapshot<T = Record<string, unknown>>(path: string, intervalM
 
   useEffect(() => {
     let active = true;
+    let timer: number;
     const load = async () => {
       try {
         const payload = await api<T>(path);
@@ -38,12 +43,16 @@ export function useSnapshot<T = Record<string, unknown>>(path: string, intervalM
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : "Unknown error");
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          setError(msg);
+          if (msg.includes("Session expired")) {
+            window.clearInterval(timer);
+          }
         }
       }
     };
     load();
-    const timer = window.setInterval(load, intervalMs);
+    timer = window.setInterval(load, intervalMs);
     return () => {
       active = false;
       window.clearInterval(timer);

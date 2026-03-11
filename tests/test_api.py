@@ -194,6 +194,7 @@ def build_settings(mode: str = "hybrid") -> Settings:
         cors_origins=("http://127.0.0.1:5173",),
         rate_limit_enabled=False,
         rate_limit_rpm=120,
+        cache_ttl_seconds=120.0,
         allow_fallback_ui=True,
         trust_proxy_headers=False,
     )

@@ -65,7 +65,6 @@ jobs:
 
       - name: SAST scan (bandit)
         run: bandit -r src/converge_ui/ -ll -ii
-        continue-on-error: true
 
       - uses: actions/setup-node@v4
         with:
@@ -103,8 +102,26 @@ jobs:
       - name: Lint (ESLint)
         run: npx eslint src/
 
-      - name: Test
-        run: npm test
+      - name: Test with coverage
+        run: npx vitest run --coverage
 
       - name: Build
         run: npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Install backend for E2E
+        run: pip install -e ".[dev]"
+        working-directory: .
+
+      - name: E2E tests
+        run: npm run test:e2e
+        env:
+          CI: true
+          CONVERGE_UI_DATA_MODE: demo
+          CONVERGE_UI_AUTH_REQUIRED: "0"
