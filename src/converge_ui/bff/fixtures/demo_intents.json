@@ -1,0 +1,209 @@
+{
+  "intent-auth-sync": {
+    "intent": {
+      "id": "intent-auth-sync",
+      "status": "RUNNING",
+      "source": "orchestrator/codex/auth-sync-9a7d",
+      "target": "main",
+      "risk_level": "medium",
+      "priority": "normal"
+    },
+    "events": [
+      {"event_type": "INTENT_CREATED", "timestamp": "2026-03-05T11:51:10Z", "payload": {"source": "orchestrator/codex/auth-sync-9a7d"}},
+      {"event_type": "RISK_EVALUATED", "timestamp": "2026-03-05T11:52:02Z", "payload": {"risk_score": 31.5, "risk_level": "medium"}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-auth-sync",
+      "risk": {
+        "risk_score": 31.5,
+        "risk_level": "medium",
+        "damage_score": 22,
+        "entropy_score": 14,
+        "propagation_score": 12
+      },
+      "compliance": {"passed": true, "alerts": []},
+      "diagnostics": [
+        {"code": "session.touchpoints", "title": "Session touches multiple auth paths", "severity": "medium"}
+      ],
+      "learning": []
+    }
+  },
+  "intent-risk-budget": {
+    "intent": {
+      "id": "intent-risk-budget",
+      "status": "RUNNING",
+      "source": "orchestrator/claude/risk-budget-e1f2",
+      "target": "main",
+      "risk_level": "low",
+      "priority": "normal"
+    },
+    "events": [
+      {"event_type": "INTENT_CREATED", "timestamp": "2026-03-05T11:56:02Z", "payload": {"source": "orchestrator/claude/risk-budget-e1f2"}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-risk-budget",
+      "risk": {
+        "risk_score": 24.1,
+        "risk_level": "low",
+        "damage_score": 10,
+        "entropy_score": 9,
+        "propagation_score": 8
+      },
+      "compliance": {"passed": true, "alerts": []},
+      "diagnostics": [],
+      "learning": []
+    }
+  },
+  "intent-merge-rebase": {
+    "intent": {
+      "id": "intent-merge-rebase",
+      "status": "REJECTED",
+      "source": "orchestrator/claude/rebase-auth-41cc",
+      "target": "main",
+      "risk_level": "high",
+      "priority": "high"
+    },
+    "events": [
+      {"event_type": "POLICY_EVALUATED", "timestamp": "2026-03-05T11:58:01Z", "payload": {"verdict": "BLOCK", "reason": "merge_conflict"}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-merge-rebase",
+      "risk": {
+        "risk_score": 48.0,
+        "risk_level": "high",
+        "damage_score": 31,
+        "entropy_score": 22,
+        "propagation_score": 21
+      },
+      "compliance": {"passed": true, "alerts": []},
+      "diagnostics": [
+        {"code": "merge.conflict", "title": "Conflict in auth/session reducer", "severity": "high"}
+      ],
+      "learning": [
+        {"code": "learn.conflict_cluster", "title": "Auth reducer is a conflict hotspot"}
+      ]
+    }
+  },
+  "intent-tests-flaky": {
+    "intent": {
+      "id": "intent-tests-flaky",
+      "status": "REJECTED",
+      "source": "orchestrator/codex/tests-fixtures-8da2",
+      "target": "main",
+      "risk_level": "medium",
+      "priority": "normal"
+    },
+    "events": [
+      {"event_type": "POLICY_EVALUATED", "timestamp": "2026-03-05T11:55:12Z", "payload": {"verdict": "BLOCK", "reason": "test_failure"}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-tests-flaky",
+      "risk": {
+        "risk_score": 36.3,
+        "risk_level": "medium",
+        "damage_score": 18,
+        "entropy_score": 11,
+        "propagation_score": 14
+      },
+      "compliance": {"passed": true, "alerts": []},
+      "diagnostics": [
+        {"code": "tests.flaky", "title": "Flaky snapshot fixture lane", "severity": "medium"}
+      ],
+      "learning": []
+    }
+  },
+  "intent-prod-policy": {
+    "intent": {
+      "id": "intent-prod-policy",
+      "status": "REJECTED",
+      "source": "orchestrator/codex/policy-fastpath-a922",
+      "target": "main",
+      "risk_level": "critical",
+      "priority": "urgent"
+    },
+    "events": [
+      {"event_type": "POLICY_EVALUATED", "timestamp": "2026-03-05T11:31:00Z", "payload": {"verdict": "BLOCK", "reason": "policy_gate"}},
+      {"event_type": "REVIEW_REQUESTED", "timestamp": "2026-03-05T11:31:12Z", "payload": {"trigger": "policy", "priority": 1}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-prod-policy",
+      "risk": {
+        "risk_score": 82.4,
+        "risk_level": "critical",
+        "damage_score": 76,
+        "entropy_score": 41,
+        "propagation_score": 55
+      },
+      "compliance": {
+        "passed": false,
+        "alerts": [
+          {"code": "security.attestation_missing", "title": "Security attestation missing"},
+          {"code": "dual_approval.required", "title": "Critical risk requires dual approval"}
+        ]
+      },
+      "diagnostics": [
+        {"code": "policy.fastpath", "title": "Production fast path violates policy guardrail", "severity": "critical"}
+      ],
+      "learning": [
+        {"code": "learn.production_gate", "title": "Critical policy gate must not be bypassed"}
+      ]
+    },
+    "reviews": [
+      {"task_id": "review-prod-policy", "intent_id": "intent-prod-policy", "status": "open", "reviewer": null, "priority": 1}
+    ],
+    "review_summary": {
+      "open_reviews": 1,
+      "completed_reviews": 0
+    },
+    "compliance_report": {
+      "passed": false,
+      "alerts": [
+        {"code": "security.attestation_missing", "title": "Security attestation missing", "severity": "critical"}
+      ],
+      "mergeable_rate": 0.42
+    }
+  },
+  "intent-critical-review": {
+    "intent": {
+      "id": "intent-critical-review",
+      "status": "REVIEW_REQUIRED",
+      "source": "orchestrator/claude/payment-route-e911",
+      "target": "main",
+      "risk_level": "high",
+      "priority": "high"
+    },
+    "events": [
+      {"event_type": "REVIEW_REQUESTED", "timestamp": "2026-03-05T11:12:00Z", "payload": {"trigger": "risk", "priority": 2}}
+    ],
+    "risk_review": {
+      "intent_id": "intent-critical-review",
+      "risk": {
+        "risk_score": 67.0,
+        "risk_level": "high",
+        "damage_score": 49,
+        "entropy_score": 28,
+        "propagation_score": 37
+      },
+      "compliance": {
+        "passed": true,
+        "alerts": [{"code": "review.pending", "title": "Manual review pending"}]
+      },
+      "diagnostics": [
+        {"code": "payments.manual_review", "title": "Payment routing change requires reviewer assignment", "severity": "high"}
+      ],
+      "learning": []
+    },
+    "reviews": [
+      {"task_id": "review-critical-1", "intent_id": "intent-critical-review", "status": "open", "reviewer": "oncall-payments", "priority": 2}
+    ],
+    "review_summary": {
+      "open_reviews": 1,
+      "completed_reviews": 0
+    },
+    "compliance_report": {
+      "passed": true,
+      "alerts": [],
+      "mergeable_rate": 0.78
+    }
+  }
+}

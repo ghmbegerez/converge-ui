@@ -56,7 +56,7 @@ def setup_module() -> None:
     routes.get_control_plane_service = lambda: FakeService()
 
 
-from converge_ui.app import create_app
+from converge_ui.app import create_app  # noqa: E402
 
 client = TestClient(create_app())
 

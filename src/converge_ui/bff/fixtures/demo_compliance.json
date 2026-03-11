@@ -1,0 +1,8 @@
+{
+  "passed": false,
+  "alerts": [
+    {"code": "security.attestation_missing", "title": "Security attestation missing", "severity": "critical"}
+  ],
+  "mergeable_rate": 0.6,
+  "source": "demo"
+}

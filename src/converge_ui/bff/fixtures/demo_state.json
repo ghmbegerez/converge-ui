@@ -1,0 +1,81 @@
+{
+  "generated_at": "2026-03-05T12:00:00Z",
+  "uptime_seconds": 86400,
+  "counts": {
+    "queued": 6,
+    "claimed": 1,
+    "running": 3,
+    "evaluated": 1,
+    "blocked": 2,
+    "retry_pending": 2,
+    "merged": 24,
+    "failed": 1
+  },
+  "running": [
+    {
+      "job_id": "job-auth-sync",
+      "agent": "codex",
+      "branch": "orchestrator/codex/auth-sync-9a7d",
+      "prompt_preview": "Stabilize auth session rotation and remove duplicate refresh paths.",
+      "attempt": 2,
+      "started_at": "2026-03-05T11:51:00Z",
+      "last_activity_at": "2026-03-05T11:59:52Z",
+      "elapsed_seconds": 540,
+      "idle_seconds": 8
+    },
+    {
+      "job_id": "job-risk-budget",
+      "agent": "claude",
+      "branch": "orchestrator/claude/risk-budget-e1f2",
+      "prompt_preview": "Reduce false positives in risk scoring for low-scope refactors.",
+      "attempt": 1,
+      "started_at": "2026-03-05T11:56:00Z",
+      "last_activity_at": "2026-03-05T11:59:57Z",
+      "elapsed_seconds": 240,
+      "idle_seconds": 3
+    },
+    {
+      "job_id": "job-ui-pulse",
+      "agent": "codex",
+      "branch": "orchestrator/codex/ui-pulse-c319",
+      "prompt_preview": "Add activity pulse states for the control plane tiles.",
+      "attempt": 1,
+      "started_at": "2026-03-05T11:58:10Z",
+      "last_activity_at": "2026-03-05T11:59:59Z",
+      "elapsed_seconds": 110,
+      "idle_seconds": 1
+    }
+  ],
+  "retry_queue": [
+    {
+      "job_id": "job-merge-rebase",
+      "attempt": 2,
+      "next_retry_at": "2026-03-05T12:02:10Z",
+      "seconds_until_retry": 130,
+      "error": "merge_conflict"
+    },
+    {
+      "job_id": "job-tests-flaky",
+      "attempt": 3,
+      "next_retry_at": "2026-03-05T12:03:45Z",
+      "seconds_until_retry": 225,
+      "error": "test_failure"
+    }
+  ],
+  "blocked": [
+    {
+      "job_id": "job-prod-policy",
+      "reason": "policy_gate",
+      "blocked_since": "2026-03-05T11:31:00Z"
+    },
+    {
+      "job_id": "job-critical-review",
+      "reason": "review_required",
+      "blocked_since": "2026-03-05T11:12:00Z"
+    }
+  ],
+  "converge": {
+    "reachable": true,
+    "last_check_at": "2026-03-05T11:59:54Z"
+  }
+}

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
 
 from converge_ui.bff.actions import ActionExecutor
 from converge_ui.bff.cache import SnapshotCache

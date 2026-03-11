@@ -43,7 +43,7 @@ class Histogram:
         self._series: dict[tuple[str, ...], dict[str, Any]] = {}
 
     def observe(self, value: float, **label_values: str) -> None:
-        key = tuple(label_values.get(l, "") for l in self.labels)
+        key = tuple(label_values.get(lbl, "") for lbl in self.labels)
         with self._lock:
             if key not in self._series:
                 self._series[key] = {
@@ -66,7 +66,7 @@ class Histogram:
         with self._lock:
             for key, entry in sorted(self._series.items()):
                 label_str = ",".join(
-                    f'{l}="{v}"' for l, v in zip(self.labels, key) if v
+                    f'{lbl}="{v}"' for lbl, v in zip(self.labels, key) if v
                 )
                 label_prefix = "{" + label_str + "}" if label_str else ""
                 cumulative = 0

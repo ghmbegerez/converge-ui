@@ -121,9 +121,9 @@ class TestConvergeContract:
 
         if missing:
             pytest.fail(
-                f"UI client expects endpoints not found in converge:\n"
+                "UI client expects endpoints not found in converge:\n"
                 + "\n".join(f"  - {m}" for m in missing)
-                + f"\n\nActual converge routes:\n"
+                + "\n\nActual converge routes:\n"
                 + "\n".join(f"  {r}" for r in sorted(CONVERGE_ROUTES))
             )
 
@@ -309,8 +309,8 @@ class TestConvergeRiskGateShape:
         resp = _CONVERGE_CLIENT.get("/v1/risk/gate/report")
         assert resp.status_code == 200
         data = resp.json()
-        assert "total_evaluations" in data, f"gate report must have 'total_evaluations'"
-        assert "block_rate" in data, f"gate report must have 'block_rate'"
+        assert "total_evaluations" in data, "gate report must have 'total_evaluations'"
+        assert "block_rate" in data, "gate report must have 'block_rate'"
 
 
 @pytest.mark.skipif(
