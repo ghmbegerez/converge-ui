@@ -42,9 +42,12 @@ src/converge_ui/
 ├── api/                # HTTP endpoints, auth, RBAC
 ├── bff/                # Backend-for-Frontend
 │   ├── service.py      # Main aggregation: orchestrator + converge → unified view
+│   ├── provider.py     # Data provider with fallback chain (real → stale-cache → demo)
+│   ├── actions.py      # Action executor (refresh, retry, review lifecycle)
 │   ├── helpers.py      # Helpers: operator actions, service status, alerts
 │   ├── cache.py        # Snapshot cache with TTL
-│   └── fixtures/       # Demo mode fixture data
+│   ├── demo_data.py    # Demo data generators for demo/hybrid modes
+│   └── fixtures/       # Demo mode fixture JSON data
 ├── clients/            # Upstream API clients
 │   └── base.py         # ApiClient base with retry + latency tracking
 ├── core/               # Core business logic
